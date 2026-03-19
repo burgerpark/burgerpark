@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>킹샷 - King Shot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      color: #fff;
+      min-height: 100dvh;
+      min-height: 100vh;
+      overflow: hidden;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100dvh;
+      min-height: 100vh;
+      padding: 20px;
+      position: relative;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* ===== SETUP SCREEN ===== */
+    .logo {
+      font-size: 3rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #FFD700, #FF6B6B, #FF2D75);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 8px;
+      letter-spacing: -2px;
+    }
+
+    .logo-sub {
+      font-size: 0.9rem;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 30px;
+    }
+
+    .player-list {
+      width: 100%;
+      max-width: 360px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+      max-height: 45vh;
+      overflow-y: auto;
+      padding: 4px;
+    }
+
+    .player-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .player-input-row input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 2px solid rgba(255,255,255,0.15);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      font-size: 16px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .player-input-row input:focus {
+      border-color: #FFD700;
+    }
+
+    .player-input-row input::placeholder {
+      color: rgba(255,255,255,0.3);
+    }
+
+    .btn-remove {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255,80,80,0.3);
+      color: #ff6b6b;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .btn-remove:hover {
+      background: rgba(255,80,80,0.5);
+    }
+
+    .setup-buttons {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .btn {
+      padding: 14px 24px;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+
+    .btn-add {
+      flex: 1;
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      border: 2px dashed rgba(255,255,255,0.25);
+    }
+
+    .btn-start {
+      flex: 2;
+      background: linear-gradient(135deg, #FFD700, #FF8C00);
+      color: #1a1a2e;
+      box-shadow: 0 4px 20px rgba(255,215,0,0.3);
+    }
+
+    .btn-start:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    /* ===== GAME SCREEN ===== */
+    .game-header {
+      text-align: center;
+      margin-bottom: 20px;
+      width: 100%;
+    }
+
+    .turn-indicator {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 4px;
+    }
+
+    .current-player {
+      font-size: 1.8rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #FFD700, #FF6B6B);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .card-area {
+      perspective: 1000px;
+      width: 260px;
+      height: 380px;
+      margin: 10px 0;
+      cursor: pointer;
+    }
+
+    .card {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .card.flipped {
+      transform: rotateY(180deg);
+    }
+
+    .card-face {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      border-radius: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      overflow: hidden;
+    }
+
+    .card-back {
+      background: linear-gradient(135deg, #1a1a3e, #2d2d6e);
+      border: 3px solid rgba(255,215,0,0.4);
+      box-shadow: 0 0 30px rgba(255,215,0,0.15), inset 0 0 60px rgba(255,215,0,0.05);
+    }
+
+    .card-back-pattern {
+      font-size: 4rem;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 0 10px rgba(255,215,0,0.3));
+    }
+
+    .card-back-text {
+      font-size: 1.6rem;
+      font-weight: 900;
+      color: #FFD700;
+      letter-spacing: 4px;
+      text-shadow: 0 0 20px rgba(255,215,0,0.3);
+    }
+
+    .card-back-hint {
+      position: absolute;
+      bottom: 20px;
+      font-size: 0.8rem;
+      color: rgba(255,215,0,0.4);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    .card-front {
+      transform: rotateY(180deg);
+      text-align: center;
+    }
+
+    .card-category {
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      background: rgba(0,0,0,0.25);
+    }
+
+    .card-icon {
+      font-size: 3.5rem;
+      margin-bottom: 12px;
+      filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));
+    }
+
+    .card-title {
+      font-size: 1.4rem;
+      font-weight: 900;
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+
+    .card-desc {
+      font-size: 0.95rem;
+      line-height: 1.6;
+      color: rgba(255,255,255,0.9);
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .card-number {
+      position: absolute;
+      top: 14px;
+      left: 18px;
+      font-size: 1.2rem;
+      font-weight: 900;
+      opacity: 0.6;
+    }
+
+    .card-suit {
+      position: absolute;
+      top: 14px;
+      right: 18px;
+      font-size: 1.2rem;
+      opacity: 0.6;
+    }
+
+    .game-footer {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-top: 20px;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .btn-next {
+      flex: 1;
+      background: linear-gradient(135deg, #6BCB77, #4CAF50);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(107,203,119,0.3);
+      display: none;
+    }
+
+    .btn-next.visible {
+      display: block;
+    }
+
+    .deck-count {
+      background: rgba(255,255,255,0.08);
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.6);
+      white-space: nowrap;
+    }
+
+    .deck-count strong {
+      color: #FFD700;
+      font-size: 1.1rem;
+    }
+
+    /* Active rules panel */
+    .active-rules {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15,12,41,0.95);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      padding: 0;
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s, padding 0.3s;
+      z-index: 100;
+    }
+
+    .active-rules.open {
+      max-height: 40vh;
+      padding: 16px 20px;
+    }
+
+    .rules-toggle {
+      position: fixed;
+      bottom: 12px;
+      right: 12px;
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(155,89,182,0.5);
+      background: rgba(155,89,182,0.2);
+      color: #BB86FC;
+      font-size: 20px;
+      cursor: pointer;
+      z-index: 101;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .rules-toggle.visible {
+      display: flex;
+    }
+
+    .rules-toggle .badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #FF6B6B;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    .active-rules h3 {
+      font-size: 0.85rem;
+      color: #BB86FC;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+
+    .rule-item {
+      padding: 8px 12px;
+      background: rgba(155,89,182,0.1);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+      color: rgba(255,255,255,0.8);
+      border-left: 3px solid #BB86FC;
+    }
+
+    /* ===== GAME OVER SCREEN ===== */
+    .gameover-title {
+      font-size: 2.5rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #FFD700, #FF6B6B, #FF2D75);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+
+    .gameover-sub {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.6);
+      margin-bottom: 30px;
+    }
+
+    .btn-restart {
+      background: linear-gradient(135deg, #FFD700, #FF8C00);
+      color: #1a1a2e;
+      box-shadow: 0 4px 20px rgba(255,215,0,0.3);
+      font-size: 1.1rem;
+      padding: 16px 40px;
+    }
+
+    .btn-newgame {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      margin-top: 10px;
+      font-size: 0.95rem;
+      padding: 12px 30px;
+    }
+
+    /* Category colors */
+    .cat-waterfall { background: linear-gradient(135deg, #667eea, #764ba2); }
+    .cat-drink { background: linear-gradient(135deg, #f093fb, #f5576c); }
+    .cat-point { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+    .cat-action { background: linear-gradient(135deg, #43e97b, #38f9d7); }
+    .cat-guys { background: linear-gradient(135deg, #fa709a, #fee140); }
+    .cat-girls { background: linear-gradient(135deg, #a18cd1, #fbc2eb); }
+    .cat-heaven { background: linear-gradient(135deg, #ffecd2, #fcb69f); color: #333; }
+    .cat-mate { background: linear-gradient(135deg, #ff9a9e, #fad0c4); color: #333; }
+    .cat-rhyme { background: linear-gradient(135deg, #a1c4fd, #c2e9fb); color: #333; }
+    .cat-category { background: linear-gradient(135deg, #d4fc79, #96e6a1); color: #333; }
+    .cat-never { background: linear-gradient(135deg, #6a11cb, #2575fc); }
+    .cat-question { background: linear-gradient(135deg, #f77062, #fe5196); }
+    .cat-king { background: linear-gradient(135deg, #FFD700, #FF8C00); color: #1a1a2e; }
+
+    /* Confetti */
+    .confetti-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 200;
+      overflow: hidden;
+    }
+
+    .confetti {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      top: -10px;
+      animation: confetti-fall linear forwards;
+    }
+
+    @keyframes confetti-fall {
+      to {
+        top: 110vh;
+        transform: rotate(720deg);
+      }
+    }
+
+    /* Landscape warning */
+    @media (orientation: landscape) and (max-height: 500px) {
+      body::after {
+        content: '📱 세로 모드로 전환해주세요';
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        z-index: 9999;
+        color: #FFD700;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- ===== SETUP SCREEN ===== -->
+  <section id="screen-setup" class="screen active">
+    <div class="logo">KING SHOT</div>
+    <div class="logo-sub">👑 술자리의 왕을 가려라</div>
+    <div class="player-list" id="playerList">
+      <div class="player-input-row">
+        <input type="text" placeholder="플레이어 1 이름" maxlength="10" autocomplete="off">
+        <button class="btn-remove" onclick="removePlayer(this)" aria-label="삭제">×</button>
+      </div>
+      <div class="player-input-row">
+        <input type="text" placeholder="플레이어 2 이름" maxlength="10" autocomplete="off">
+        <button class="btn-remove" onclick="removePlayer(this)" aria-label="삭제">×</button>
+      </div>
+    </div>
+    <div class="setup-buttons">
+      <button class="btn btn-add" id="btnAdd" onclick="addPlayer()">+ 추가</button>
+      <button class="btn btn-start" id="btnStart" onclick="startGame()">게임 시작 🎉</button>
+    </div>
+  </section>
+
+  <!-- ===== GAME SCREEN ===== -->
+  <section id="screen-game" class="screen">
+    <div class="game-header">
+      <div class="turn-indicator">차례</div>
+      <div class="current-player" id="currentPlayer"></div>
+    </div>
+
+    <div class="card-area" id="cardArea" onclick="drawCard()">
+      <div class="card" id="card">
+        <div class="card-face card-back">
+          <div class="card-back-pattern">👑</div>
+          <div class="card-back-text">KING SHOT</div>
+          <div class="card-back-hint">탭하여 카드 뽑기</div>
+        </div>
+        <div class="card-face card-front" id="cardFront">
+          <span class="card-number" id="cardNumber"></span>
+          <span class="card-suit" id="cardSuit"></span>
+          <div class="card-category" id="cardCategory"></div>
+          <div class="card-icon" id="cardIcon"></div>
+          <div class="card-title" id="cardTitle"></div>
+          <div class="card-desc" id="cardDesc"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-footer">
+      <div class="deck-count">남은 카드 <strong id="deckCount">52</strong>장</div>
+      <button class="btn btn-next" id="btnNext" onclick="nextTurn()">다음 차례 →</button>
+    </div>
+
+    <button class="rules-toggle" id="rulesToggle" onclick="toggleRules()">
+      📜
+      <span class="badge" id="rulesBadge">0</span>
+    </button>
+    <div class="active-rules" id="activeRules">
+      <h3>📜 현재 적용 중인 규칙</h3>
+      <div id="rulesList"></div>
+    </div>
+  </section>
+
+  <!-- ===== GAME OVER SCREEN ===== -->
+  <section id="screen-gameover" class="screen">
+    <div class="gameover-title">게임 끝! 🎊</div>
+    <div class="gameover-sub" id="gameoverMsg">모든 카드를 다 뽑았습니다!</div>
+    <button class="btn btn-restart" onclick="restartGame()">다시 하기 🔄</button>
+    <button class="btn btn-newgame" onclick="newGame()">새 게임 (플레이어 변경)</button>
+  </section>
+
+  <div class="confetti-container" id="confetti"></div>
+
+  <script>
+    // ===== STATE =====
+    const state = {
+      players: [],
+      currentPlayerIndex: 0,
+      deck: [],
+      drawnCard: null,
+      isFlipping: false,
+      activeRules: [],
+      kingCount: 0,
+      rulesOpen: false
+    };
+
+    // ===== CARD DATA =====
+    const SUITS = ['♠', '♥', '♦', '♣'];
+    const SUIT_NAMES = ['스페이드', '하트', '다이아', '클로버'];
+    const VALUES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+
+    const CARD_RULES = {
+      'A': {
+        category: '폭포수',
+        catClass: 'cat-waterfall',
+        icon: '🌊',
+        title: '폭포수!',
+        desc: '{player}부터 시작! 모두 동시에 마시기 시작하세요. {player}이(가) 멈출 때까지 왼쪽 사람은 멈출 수 없어요!'
+      },
+      '2': {
+        category: '지목',
+        catClass: 'cat-drink',
+        icon: '👉',
+        title: '너 마셔!',
+        desc: '{player}님이 한 명을 지목하세요! 지목당한 사람은 한 잔!'
+      },
+      '3': {
+        category: '셀프',
+        catClass: 'cat-point',
+        icon: '🍺',
+        title: '나 마셔!',
+        desc: '{player}님이 직접 한 잔 마셔야 합니다!'
+      },
+      '4': {
+        category: '바닥',
+        catClass: 'cat-action',
+        icon: '👇',
+        title: '바닥!',
+        desc: '모두 바닥을 짚으세요! 가장 늦은 사람이 마셔요!'
+      },
+      '5': {
+        category: '남자',
+        catClass: 'cat-guys',
+        icon: '🙋‍♂️',
+        title: '남자들 마셔!',
+        desc: '남자 플레이어 전원 한 잔씩!'
+      },
+      '6': {
+        category: '여자',
+        catClass: 'cat-girls',
+        icon: '🙋‍♀️',
+        title: '여자들 마셔!',
+        desc: '여자 플레이어 전원 한 잔씩!'
+      },
+      '7': {
+        category: '하늘',
+        catClass: 'cat-heaven',
+        icon: '🙌',
+        title: '하늘로 손!',
+        desc: '{player}님이 손을 올리면 모두 따라 올리세요! 가장 늦은 사람이 마셔요! 이 효과는 다음 7이 나올 때까지 유지됩니다.'
+      },
+      '8': {
+        category: '짝꿍',
+        catClass: 'cat-mate',
+        icon: '🤝',
+        title: '짝꿍!',
+        desc: '{player}님이 짝꿍을 한 명 고르세요! 이제부터 한 사람이 마실 때 짝꿍도 같이 마셔요!'
+      },
+      '9': {
+        category: '라임',
+        catClass: 'cat-rhyme',
+        icon: '🎤',
+        title: '라임 타임!',
+        desc: '{player}님이 단어를 말하면 시계 방향으로 라임(끝말잇기)! 막히는 사람이 마셔요!'
+      },
+      '10': {
+        category: '카테고리',
+        catClass: 'cat-category',
+        icon: '📂',
+        title: '카테고리!',
+        desc: '{player}님이 주제를 정하세요! (예: 소주 브랜드, 아이돌 그룹 등) 시계 방향으로 돌아가며 대답! 막히면 마셔요!'
+      },
+      'J': {
+        category: '나는 한 번도',
+        catClass: 'cat-never',
+        icon: '🙅',
+        title: '나는 한 번도...',
+        desc: '{player}님이 "나는 한 번도 ~한 적 없다"를 말하세요! 해본 적 있는 사람은 모두 마셔요!'
+      },
+      'Q': {
+        category: '질문왕',
+        catClass: 'cat-question',
+        icon: '❓',
+        title: '질문왕!',
+        desc: '{player}님이 질문왕이 됩니다! 질문왕의 질문에 대답하면 마셔요! 다음 Q가 나올 때까지 유지!'
+      },
+      'K': {
+        category: '킹',
+        catClass: 'cat-king',
+        icon: '👑',
+        title: '킹의 잔!',
+        desc: '{player}님! 가운데 컵에 자기 술을 따르세요! 4번째 K를 뽑는 사람이 그 잔을 원샷!'
+      }
+    };
+
+    // ===== DECK FUNCTIONS =====
+    function createDeck() {
+      const deck = [];
+      for (const suit of SUITS) {
+        for (const value of VALUES) {
+          deck.push({ suit, value });
+        }
+      }
+      // Fisher-Yates shuffle
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
+      }
+      return deck;
+    }
+
+    // ===== SCREEN MANAGEMENT =====
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+
+      const rulesToggle = document.getElementById('rulesToggle');
+      if (id === 'screen-game') {
+        if (state.activeRules.length > 0) {
+          rulesToggle.classList.add('visible');
+        }
+      } else {
+        rulesToggle.classList.remove('visible');
+        closeRules();
+      }
+    }
+
+    // ===== PLAYER SETUP =====
+    function addPlayer() {
+      const list = document.getElementById('playerList');
+      const count = list.children.length;
+      if (count >= 8) return;
+
+      const row = document.createElement('div');
+      row.className = 'player-input-row';
+      row.innerHTML = `
+        <input type="text" placeholder="플레이어 ${count + 1} 이름" maxlength="10" autocomplete="off">
+        <button class="btn-remove" onclick="removePlayer(this)" aria-label="삭제">×</button>
+      `;
+      list.appendChild(row);
+      row.querySelector('input').focus();
+      updateAddButton();
+    }
+
+    function removePlayer(btn) {
+      const list = document.getElementById('playerList');
+      if (list.children.length <= 2) return;
+      btn.parentElement.remove();
+      // update placeholders
+      Array.from(list.children).forEach((row, i) => {
+        row.querySelector('input').placeholder = `플레이어 ${i + 1} 이름`;
+      });
+      updateAddButton();
+    }
+
+    function updateAddButton() {
+      const count = document.getElementById('playerList').children.length;
+      document.getElementById('btnAdd').style.display = count >= 8 ? 'none' : 'block';
+    }
+
+    function getPlayerNames() {
+      const inputs = document.querySelectorAll('#playerList input');
+      const names = [];
+      inputs.forEach(input => {
+        const name = input.value.trim();
+        if (name) names.push(name);
+      });
+      return names;
+    }
+
+    // ===== GAME START =====
+    function startGame() {
+      const names = getPlayerNames();
+      if (names.length < 2) {
+        alert('최소 2명의 플레이어 이름을 입력하세요!');
+        return;
+      }
+      if (new Set(names).size !== names.length) {
+        alert('이름이 중복되지 않게 입력하세요!');
+        return;
+      }
+
+      state.players = names;
+      state.currentPlayerIndex = 0;
+      state.deck = createDeck();
+      state.drawnCard = null;
+      state.isFlipping = false;
+      state.activeRules = [];
+      state.kingCount = 0;
+      state.rulesOpen = false;
+
+      updateGameUI();
+      showScreen('screen-game');
+    }
+
+    function updateGameUI() {
+      document.getElementById('currentPlayer').textContent = state.players[state.currentPlayerIndex];
+      document.getElementById('deckCount').textContent = state.deck.length;
+      document.getElementById('btnNext').classList.remove('visible');
+
+      // reset card
+      const card = document.getElementById('card');
+      card.classList.remove('flipped');
+      state.drawnCard = null;
+      state.isFlipping = false;
+    }
+
+    // ===== CARD DRAW =====
+    function drawCard() {
+      if (state.isFlipping || state.drawnCard) return;
+      if (state.deck.length === 0) {
+        endGame();
+        return;
+      }
+
+      state.isFlipping = true;
+      const cardData = state.deck.pop();
+      state.drawnCard = cardData;
+
+      // haptic
+      if (navigator.vibrate) navigator.vibrate(50);
+
+      // render card front
+      renderCardFront(cardData);
+
+      // flip
+      const card = document.getElementById('card');
+      card.classList.add('flipped');
+
+      setTimeout(() => {
+        state.isFlipping = false;
+        document.getElementById('btnNext').classList.add('visible');
+        document.getElementById('deckCount').textContent = state.deck.length;
+
+        // handle special cards
+        handleSpecialCard(cardData);
+      }, 600);
+    }
+
+    function renderCardFront(cardData) {
+      const rule = CARD_RULES[cardData.value];
+      const playerName = state.players[state.currentPlayerIndex];
+
+      // pick a random other player for {target}
+      const others = state.players.filter((_, i) => i !== state.currentPlayerIndex);
+      const target = others[Math.floor(Math.random() * others.length)] || playerName;
+
+      const front = document.getElementById('cardFront');
+      front.className = `card-face card-front ${rule.catClass}`;
+
+      document.getElementById('cardNumber').textContent = cardData.value;
+      document.getElementById('cardSuit').textContent = cardData.suit;
+      document.getElementById('cardCategory').textContent = rule.category;
+      document.getElementById('cardIcon').textContent = rule.icon;
+      document.getElementById('cardTitle').textContent = rule.title;
+      document.getElementById('cardDesc').textContent = rule.desc
+        .replace(/{player}/g, playerName)
+        .replace(/{target}/g, target);
+    }
+
+    function handleSpecialCard(cardData) {
+      const playerName = state.players[state.currentPlayerIndex];
+
+      if (cardData.value === 'K') {
+        state.kingCount++;
+        if (state.kingCount === 4) {
+          // last king - show special message
+          document.getElementById('cardDesc').textContent =
+            `🔥 ${playerName}님이 4번째 킹! 가운데 잔을 원샷하세요!!! 🔥`;
+        } else {
+          document.getElementById('cardDesc').textContent +=
+            ` (${state.kingCount}/4)`;
+        }
+      }
+
+      if (cardData.value === 'Q') {
+        // Remove old question master rule
+        state.activeRules = state.activeRules.filter(r => r.type !== 'question');
+        state.activeRules.push({
+          type: 'question',
+          text: `❓ 질문왕: ${playerName} — 질문에 대답하면 벌칙!`
+        });
+        updateRulesUI();
+      }
+
+      if (cardData.value === '7') {
+        state.activeRules = state.activeRules.filter(r => r.type !== 'heaven');
+        state.activeRules.push({
+          type: 'heaven',
+          text: `🙌 하늘 마스터: ${playerName} — 언제든 손을 올리면 따라해야 함!`
+        });
+        updateRulesUI();
+      }
+
+      if (cardData.value === '8') {
+        state.activeRules.push({
+          type: 'mate',
+          text: `🤝 짝꿍: ${playerName} + ?`
+        });
+        updateRulesUI();
+      }
+    }
+
+    function updateRulesUI() {
+      const toggle = document.getElementById('rulesToggle');
+      const badge = document.getElementById('rulesBadge');
+      const list = document.getElementById('rulesList');
+
+      if (state.activeRules.length > 0) {
+        toggle.classList.add('visible');
+        badge.textContent = state.activeRules.length;
+        list.innerHTML = state.activeRules
+          .map(r => `<div class="rule-item">${r.text}</div>`)
+          .join('');
+      } else {
+        toggle.classList.remove('visible');
+      }
+    }
+
+    function toggleRules() {
+      const panel = document.getElementById('activeRules');
+      state.rulesOpen = !state.rulesOpen;
+      if (state.rulesOpen) {
+        panel.classList.add('open');
+      } else {
+        panel.classList.remove('open');
+      }
+    }
+
+    function closeRules() {
+      state.rulesOpen = false;
+      document.getElementById('activeRules').classList.remove('open');
+    }
+
+    // ===== NEXT TURN =====
+    function nextTurn() {
+      if (state.deck.length === 0) {
+        endGame();
+        return;
+      }
+
+      state.currentPlayerIndex = (state.currentPlayerIndex + 1) % state.players.length;
+      closeRules();
+      updateGameUI();
+    }
+
+    // ===== GAME OVER =====
+    function endGame() {
+      showScreen('screen-gameover');
+      spawnConfetti();
+    }
+
+    function restartGame() {
+      state.deck = createDeck();
+      state.currentPlayerIndex = 0;
+      state.drawnCard = null;
+      state.isFlipping = false;
+      state.activeRules = [];
+      state.kingCount = 0;
+      state.rulesOpen = false;
+
+      updateGameUI();
+      showScreen('screen-game');
+      clearConfetti();
+    }
+
+    function newGame() {
+      showScreen('screen-setup');
+      clearConfetti();
+    }
+
+    // ===== CONFETTI =====
+    function spawnConfetti() {
+      const container = document.getElementById('confetti');
+      const colors = ['#FFD700', '#FF6B6B', '#6BCB77', '#4D96FF', '#FF8C32', '#BB86FC'];
+      for (let i = 0; i < 60; i++) {
+        const el = document.createElement('div');
+        el.className = 'confetti';
+        el.style.left = Math.random() * 100 + '%';
+        el.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        el.style.width = (Math.random() * 8 + 6) + 'px';
+        el.style.height = (Math.random() * 8 + 6) + 'px';
+        el.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+        el.style.animationDuration = (Math.random() * 2 + 2) + 's';
+        el.style.animationDelay = (Math.random() * 2) + 's';
+        container.appendChild(el);
+      }
+    }
+
+    function clearConfetti() {
+      document.getElementById('confetti').innerHTML = '';
+    }
+  </script>
+</body>
+</html>
