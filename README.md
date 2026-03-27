@@ -37,6 +37,28 @@ dotnet run --project src/ComIpBridge.csproj
 dotnet publish src/ComIpBridge.csproj -c Release -r win-x64 --self-contained
 ```
 
+### 설치 파일 생성 (Inno Setup)
+
+#### 방법 1: 원클릭 빌드 스크립트
+```bash
+# CMD
+build.bat
+
+# PowerShell
+.\build.ps1
+```
+
+#### 방법 2: 수동
+1. [Inno Setup 6](https://jrsoftware.org/isdl.php) 설치
+2. `dotnet publish` 로 빌드
+3. Inno Setup에서 `installer/setup.iss` 열고 컴파일
+4. `installer/Output/ComIpBridge_Setup_v1.0.0.exe` 생성됨
+
+### 설치 옵션
+- 바탕화면 바로가기
+- Windows 시작 시 자동 실행
+- `.combridge` 파일 연결 (설정 파일 더블클릭으로 열기)
+
 ## 사용법
 
 1. **Add Port** 버튼으로 새 브릿지 포트 추가
