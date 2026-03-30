@@ -38,14 +38,14 @@ public class DataMonitorPanel : UserControl
         var btnClear = new ToolStripButton("Clear");
         btnClear.Click += (_, _) =>
         {
-            _logTextBox.Clear();
+            _logTextBox!.Clear();
             _currentBridge?.ClearLog();
         };
 
         var btnCopy = new ToolStripButton("Copy All");
         btnCopy.Click += (_, _) =>
         {
-            if (_logTextBox.TextLength > 0)
+            if (_logTextBox!.TextLength > 0)
                 Clipboard.SetText(_logTextBox.Text);
         };
 
