@@ -10,7 +10,9 @@
     <RootNamespace>ComIpBridge</RootNamespace>
     <Version>1.0.0</Version>
     <Authors>BurgerPark</Authors>
-    <Description>COM Port to TCP/IP Bridge - Multi-port serial to network bridge</Description>
+    <Company>BurgerPark</Company>
+    <Copyright>Copyright (c) 2026 BurgerPark</Copyright>
+    <Description>BurgerPark COM-IP Bridge - 멀티포트 시리얼 브릿지</Description>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 

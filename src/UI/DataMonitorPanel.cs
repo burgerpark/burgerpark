@@ -20,10 +20,10 @@ public class DataMonitorPanel : UserControl
 
         _monitorToolStrip = new ToolStrip { GripStyle = ToolStripGripStyle.Hidden };
 
-        var lblTitle = new ToolStripLabel("Data Monitor") { Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
+        var lblTitle = new ToolStripLabel("데이터 모니터") { Font = new Font("Segoe UI", 9F, FontStyle.Bold) };
 
         _cboDisplayMode = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
-        _cboDisplayMode.Items.AddRange(new object[] { "Hex + ASCII", "Hex Only", "ASCII Only" });
+        _cboDisplayMode.Items.AddRange(new object[] { "Hex + ASCII", "Hex만", "ASCII만" });
         _cboDisplayMode.SelectedIndex = 0;
         _cboDisplayMode.SelectedIndexChanged += (_, _) =>
         {
@@ -32,17 +32,17 @@ public class DataMonitorPanel : UserControl
         };
         var hostDisplay = new ToolStripControlHost(_cboDisplayMode);
 
-        _chkAutoScroll = new CheckBox { Text = "Auto-scroll", Checked = true };
+        _chkAutoScroll = new CheckBox { Text = "자동 스크롤", Checked = true };
         var hostScroll = new ToolStripControlHost(_chkAutoScroll);
 
-        var btnClear = new ToolStripButton("Clear");
+        var btnClear = new ToolStripButton("지우기");
         btnClear.Click += (_, _) =>
         {
             _logTextBox!.Clear();
             _currentBridge?.ClearLog();
         };
 
-        var btnCopy = new ToolStripButton("Copy All");
+        var btnCopy = new ToolStripButton("전체 복사");
         btnCopy.Click += (_, _) =>
         {
             if (_logTextBox!.TextLength > 0)
@@ -141,7 +141,7 @@ public class DataMonitorPanel : UserControl
             return $"[{entry.Timestamp:HH:mm:ss.fff}] {entry.Message}";
 
         if (entry.Data == null)
-            return $"[{entry.Timestamp:HH:mm:ss.fff}] (no data)";
+            return $"[{entry.Timestamp:HH:mm:ss.fff}] (데이터 없음)";
 
         var dir = entry.Direction == LogDirection.ComToTcp ? "COM→TCP" : "TCP→COM";
         var prefix = $"[{entry.Timestamp:HH:mm:ss.fff}] {dir} ({entry.Data.Length}B): ";

@@ -34,7 +34,7 @@ public class PortConfigDialog : Form
     {
         _config = config;
 
-        Text = config.Name == "" ? "Add Bridge Port" : $"Edit: {config.Name}";
+        Text = config.Name == "" ? "브릿지 포트 추가" : $"편집: {config.Name}";
         Size = new Size(480, 560);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -43,17 +43,17 @@ public class PortConfigDialog : Form
         Font = new Font("Segoe UI", 9F);
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
-        var tabGeneral = new TabPage("General");
-        var tabSerial = new TabPage("Serial Port");
-        var tabAdvanced = new TabPage("Advanced");
+        var tabGeneral = new TabPage("일반");
+        var tabSerial = new TabPage("시리얼 포트");
+        var tabAdvanced = new TabPage("고급 설정");
 
-        // ── General Tab ──
+        // ── 일반 탭 ──
         int y = 15;
-        _chkEnabled = AddCheckBox(tabGeneral, "Enabled", config.Enabled, ref y);
+        _chkEnabled = AddCheckBox(tabGeneral, "활성화", config.Enabled, ref y);
 
-        _txtName = AddTextBox(tabGeneral, "Name:", config.Name, ref y);
+        _txtName = AddTextBox(tabGeneral, "이름:", config.Name, ref y);
 
-        AddLabel(tabGeneral, "COM Port:", ref y);
+        AddLabel(tabGeneral, "COM 포트:", ref y);
         _cboComPort = new ComboBox { Left = 140, Top = y - 22, Width = 280, DropDownStyle = ComboBoxStyle.DropDown };
         _cboComPort.Items.AddRange(SerialPort.GetPortNames().Cast<object>().ToArray());
         if (_cboComPort.Items.Count == 0)
@@ -63,16 +63,16 @@ public class PortConfigDialog : Form
         _cboComPort.Text = config.ComPort;
         tabGeneral.Controls.Add(_cboComPort);
 
-        AddLabel(tabGeneral, "Connection Mode:", ref y);
+        AddLabel(tabGeneral, "연결 모드:", ref y);
         _cboMode = new ComboBox { Left = 140, Top = y - 22, Width = 280, DropDownStyle = ComboBoxStyle.DropDownList };
-        _cboMode.Items.AddRange(new object[] { "TCP Server", "TCP Client", "UDP" });
+        _cboMode.Items.AddRange(new object[] { "TCP 서버", "TCP 클라이언트", "UDP" });
         _cboMode.SelectedIndex = (int)config.Mode;
         _cboMode.SelectedIndexChanged += CboMode_Changed;
         tabGeneral.Controls.Add(_cboMode);
 
-        _txtIp = AddTextBox(tabGeneral, "IP Address:", config.RemoteIp, ref y);
+        _txtIp = AddTextBox(tabGeneral, "IP 주소:", config.RemoteIp, ref y);
 
-        AddLabel(tabGeneral, "TCP/UDP Port:", ref y);
+        AddLabel(tabGeneral, "TCP/UDP 포트:", ref y);
         _nudPort = new NumericUpDown
         {
             Left = 140, Top = y - 22, Width = 280,
@@ -80,43 +80,43 @@ public class PortConfigDialog : Form
         };
         tabGeneral.Controls.Add(_nudPort);
 
-        // ── Serial Tab ──
+        // ── 시리얼 포트 탭 ──
         y = 15;
-        AddLabel(tabSerial, "Baud Rate:", ref y);
+        AddLabel(tabSerial, "전송속도 (Baud):", ref y);
         _cboBaudRate = new ComboBox { Left = 140, Top = y - 22, Width = 280, DropDownStyle = ComboBoxStyle.DropDown };
         _cboBaudRate.Items.AddRange(new object[] { "300", "1200", "2400", "4800", "9600", "19200", "38400", "57600", "115200", "230400", "460800", "921600" });
         _cboBaudRate.Text = config.BaudRate.ToString();
         tabSerial.Controls.Add(_cboBaudRate);
 
-        AddLabel(tabSerial, "Data Bits:", ref y);
+        AddLabel(tabSerial, "데이터 비트:", ref y);
         _cboDataBits = new ComboBox { Left = 140, Top = y - 22, Width = 280, DropDownStyle = ComboBoxStyle.DropDownList };
         _cboDataBits.Items.AddRange(new object[] { "5", "6", "7", "8" });
         _cboDataBits.Text = config.DataBits.ToString();
         tabSerial.Controls.Add(_cboDataBits);
 
-        AddLabel(tabSerial, "Stop Bits:", ref y);
+        AddLabel(tabSerial, "정지 비트:", ref y);
         _cboStopBits = new ComboBox { Left = 140, Top = y - 22, Width = 280, DropDownStyle = ComboBoxStyle.DropDownList };
         _cboStopBits.Items.AddRange(new object[] { "1", "1.5", "2" });
         _cboStopBits.Text = config.StopBits.ToString("0.##");
         tabSerial.Controls.Add(_cboStopBits);
 
-        AddLabel(tabSerial, "Parity:", ref y);
+        AddLabel(tabSerial, "패리티:", ref y);
         _cboParity = new ComboBox { Left = 140, Top = y - 22, Width = 280, DropDownStyle = ComboBoxStyle.DropDownList };
         _cboParity.Items.AddRange(new object[] { "None", "Odd", "Even", "Mark", "Space" });
         _cboParity.Text = config.Parity;
         tabSerial.Controls.Add(_cboParity);
 
-        AddLabel(tabSerial, "Flow Control:", ref y);
+        AddLabel(tabSerial, "흐름 제어:", ref y);
         _cboFlowControl = new ComboBox { Left = 140, Top = y - 22, Width = 280, DropDownStyle = ComboBoxStyle.DropDownList };
-        _cboFlowControl.Items.AddRange(new object[] { "None", "RTS/CTS", "DTR/DSR", "XON/XOFF" });
+        _cboFlowControl.Items.AddRange(new object[] { "없음", "RTS/CTS", "DTR/DSR", "XON/XOFF" });
         _cboFlowControl.SelectedIndex = (int)config.FlowControl;
         tabSerial.Controls.Add(_cboFlowControl);
 
-        // ── Advanced Tab ──
+        // ── 고급 설정 탭 ──
         y = 15;
-        _chkAutoReconnect = AddCheckBox(tabAdvanced, "Auto Reconnect", config.AutoReconnect, ref y);
+        _chkAutoReconnect = AddCheckBox(tabAdvanced, "자동 재연결", config.AutoReconnect, ref y);
 
-        AddLabel(tabAdvanced, "Reconnect Interval (ms):", ref y);
+        AddLabel(tabAdvanced, "재연결 간격 (ms):", ref y);
         _nudReconnectInterval = new NumericUpDown
         {
             Left = 180, Top = y - 22, Width = 240,
@@ -124,27 +124,27 @@ public class PortConfigDialog : Form
         };
         tabAdvanced.Controls.Add(_nudReconnectInterval);
 
-        _chkConnectOnData = AddCheckBox(tabAdvanced, "Connect on Data (lazy connect)", config.ConnectOnData, ref y);
+        _chkConnectOnData = AddCheckBox(tabAdvanced, "데이터 발생 시 연결 (지연 연결)", config.ConnectOnData, ref y);
 
-        AddLabel(tabAdvanced, "Inactivity Timeout (ms):", ref y);
+        AddLabel(tabAdvanced, "비활성 타임아웃 (ms):", ref y);
         _nudInactivityTimeout = new NumericUpDown
         {
             Left = 180, Top = y - 22, Width = 240,
             Minimum = 0, Maximum = 600000, Value = config.InactivityTimeoutMs, Increment = 1000
         };
         tabAdvanced.Controls.Add(_nudInactivityTimeout);
-        AddLabel(tabAdvanced, "(0 = disabled)", ref y);
+        AddLabel(tabAdvanced, "(0 = 사용 안 함)", ref y);
         y -= 10;
 
-        _chkEnableRfc2217 = AddCheckBox(tabAdvanced, "Enable RFC 2217 (Telnet COM Control)", config.EnableRfc2217, ref y);
-        _chkEnableLogging = AddCheckBox(tabAdvanced, "Enable Data Logging", config.EnableLogging, ref y);
+        _chkEnableRfc2217 = AddCheckBox(tabAdvanced, "RFC 2217 사용 (Telnet COM 제어)", config.EnableRfc2217, ref y);
+        _chkEnableLogging = AddCheckBox(tabAdvanced, "데이터 로깅 사용", config.EnableLogging, ref y);
 
         tabs.TabPages.AddRange(new[] { tabGeneral, tabSerial, tabAdvanced });
 
         // Buttons panel
         var buttonPanel = new Panel { Dock = DockStyle.Bottom, Height = 50 };
-        var btnOk = new Button { Text = "OK", DialogResult = DialogResult.OK, Width = 90, Height = 32, Left = 260, Top = 8 };
-        var btnCancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Width = 90, Height = 32, Left = 360, Top = 8 };
+        var btnOk = new Button { Text = "확인", DialogResult = DialogResult.OK, Width = 90, Height = 32, Left = 260, Top = 8 };
+        var btnCancel = new Button { Text = "취소", DialogResult = DialogResult.Cancel, Width = 90, Height = 32, Left = 360, Top = 8 };
         btnOk.Click += BtnOk_Click;
         buttonPanel.Controls.AddRange(new Control[] { btnOk, btnCancel });
 
@@ -158,23 +158,21 @@ public class PortConfigDialog : Form
 
     private void CboMode_Changed(object? sender, EventArgs e)
     {
-        // IP label context changes based on mode
         bool isServer = _cboMode.SelectedIndex == 0;
-        // For server: bind address; for client: remote address
     }
 
     private void BtnOk_Click(object? sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_txtName.Text))
         {
-            MessageBox.Show(this, "Name is required.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, "이름을 입력해주세요.", "입력 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             DialogResult = DialogResult.None;
             return;
         }
 
         if (!int.TryParse(_cboBaudRate.Text, out int baudRate) || baudRate <= 0)
         {
-            MessageBox.Show(this, "Invalid baud rate.", "Validation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, "올바른 전송속도를 입력해주세요.", "입력 오류", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             DialogResult = DialogResult.None;
             return;
         }

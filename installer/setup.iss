@@ -1,11 +1,12 @@
-; COM-IP Bridge Installer Script for Inno Setup
-; Download Inno Setup: https://jrsoftware.org/isdl.php
+; COM-IP Bridge 설치 스크립트 (Inno Setup)
+; 제작: BurgerPark
+; Inno Setup 다운로드: https://jrsoftware.org/isdl.php
 
 #define MyAppName "COM-IP Bridge"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "BurgerPark"
 #define MyAppExeName "ComIpBridge.exe"
-#define MyAppDescription "Multi-port COM to TCP/IP Bridge"
+#define MyAppDescription "BurgerPark 멀티포트 COM-IP 브릿지"
 
 [Setup]
 AppId={{B8A1C3D5-E7F9-4A2B-8C6D-1E3F5A7B9D0E}

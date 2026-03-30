@@ -75,7 +75,7 @@ public class MainForm : Form
 
     private void InitializeForm()
     {
-        Text = "COM-IP Bridge  v1.0 - Multi Port Serial Bridge";
+        Text = "COM-IP Bridge v1.0 - 멀티포트 시리얼 브릿지  |  BurgerPark";
         Size = new Size(900, 650);
         MinimumSize = new Size(700, 500);
         StartPosition = FormStartPosition.CenterScreen;
@@ -94,44 +94,44 @@ public class MainForm : Form
             Padding = new Padding(4, 2, 4, 2)
         };
 
-        var btnAdd = new ToolStripButton("Add Port") { ToolTipText = "Add new bridge port" };
+        var btnAdd = new ToolStripButton("포트 추가") { ToolTipText = "새 브릿지 포트 추가" };
         btnAdd.Click += BtnAdd_Click;
 
-        var btnEdit = new ToolStripButton("Edit") { ToolTipText = "Edit selected port" };
+        var btnEdit = new ToolStripButton("편집") { ToolTipText = "선택한 포트 설정 편집" };
         btnEdit.Click += BtnEdit_Click;
 
-        var btnRemove = new ToolStripButton("Remove") { ToolTipText = "Remove selected port" };
+        var btnRemove = new ToolStripButton("삭제") { ToolTipText = "선택한 포트 삭제" };
         btnRemove.Click += BtnRemove_Click;
 
-        var btnStartSelected = new ToolStripButton("Start") { ToolTipText = "Start selected port" };
+        var btnStartSelected = new ToolStripButton("시작") { ToolTipText = "선택한 포트 시작" };
         btnStartSelected.Click += BtnStartSelected_Click;
 
-        var btnStopSelected = new ToolStripButton("Stop") { ToolTipText = "Stop selected port" };
+        var btnStopSelected = new ToolStripButton("정지") { ToolTipText = "선택한 포트 정지" };
         btnStopSelected.Click += BtnStopSelected_Click;
 
-        var btnStartAll = new ToolStripButton("Start All") { ToolTipText = "Start all enabled ports" };
+        var btnStartAll = new ToolStripButton("전체 시작") { ToolTipText = "활성화된 모든 포트 시작" };
         btnStartAll.Click += BtnStartAll_Click;
 
-        var btnStopAll = new ToolStripButton("Stop All") { ToolTipText = "Stop all ports" };
+        var btnStopAll = new ToolStripButton("전체 정지") { ToolTipText = "모든 포트 정지" };
         btnStopAll.Click += BtnStopAll_Click;
 
-        var btnExport = new ToolStripButton("Export") { ToolTipText = "Export configuration" };
+        var btnExport = new ToolStripButton("내보내기") { ToolTipText = "설정 파일 내보내기" };
         btnExport.Click += BtnExport_Click;
 
-        var btnImport = new ToolStripButton("Import") { ToolTipText = "Import configuration" };
+        var btnImport = new ToolStripButton("가져오기") { ToolTipText = "설정 파일 가져오기" };
         btnImport.Click += BtnImport_Click;
 
-        var chkStartup = new ToolStripButton("Startup: OFF")
+        var chkStartup = new ToolStripButton("자동실행: OFF")
         {
-            ToolTipText = "Toggle Windows startup registration",
+            ToolTipText = "Windows 시작 시 자동 실행 등록/해제",
             CheckOnClick = true,
             Checked = IsRegisteredInStartup()
         };
-        chkStartup.Text = chkStartup.Checked ? "Startup: ON" : "Startup: OFF";
+        chkStartup.Text = chkStartup.Checked ? "자동실행: ON" : "자동실행: OFF";
         chkStartup.Click += (_, _) =>
         {
             SetStartupRegistration(chkStartup.Checked);
-            chkStartup.Text = chkStartup.Checked ? "Startup: ON" : "Startup: OFF";
+            chkStartup.Text = chkStartup.Checked ? "자동실행: ON" : "자동실행: OFF";
         };
 
         strip.Items.AddRange(new ToolStripItem[]
@@ -171,14 +171,14 @@ public class MainForm : Form
 
         lv.Columns.AddRange(new[]
         {
-            new ColumnHeader { Text = "Name", Width = 100 },
-            new ColumnHeader { Text = "COM Port", Width = 80 },
-            new ColumnHeader { Text = "Mode", Width = 90 },
-            new ColumnHeader { Text = "IP:Port", Width = 160 },
-            new ColumnHeader { Text = "Baud Rate", Width = 80 },
-            new ColumnHeader { Text = "Status", Width = 160 },
-            new ColumnHeader { Text = "TX (bytes)", Width = 90 },
-            new ColumnHeader { Text = "RX (bytes)", Width = 90 }
+            new ColumnHeader { Text = "이름", Width = 100 },
+            new ColumnHeader { Text = "COM 포트", Width = 80 },
+            new ColumnHeader { Text = "모드", Width = 90 },
+            new ColumnHeader { Text = "IP:포트", Width = 160 },
+            new ColumnHeader { Text = "전송속도", Width = 80 },
+            new ColumnHeader { Text = "상태", Width = 160 },
+            new ColumnHeader { Text = "송신 (바이트)", Width = 90 },
+            new ColumnHeader { Text = "수신 (바이트)", Width = 90 }
         });
 
         lv.SelectedIndexChanged += PortListView_SelectedIndexChanged;
@@ -190,11 +190,11 @@ public class MainForm : Form
     private ContextMenuStrip CreateTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Show", null, (_, _) => RestoreFromTray());
-        menu.Items.Add("Start All", null, (_, _) => _ = _manager.StartAllAsync());
-        menu.Items.Add("Stop All", null, (_, _) => _ = _manager.StopAllAsync());
+        menu.Items.Add("열기", null, (_, _) => RestoreFromTray());
+        menu.Items.Add("전체 시작", null, (_, _) => _ = _manager.StartAllAsync());
+        menu.Items.Add("전체 정지", null, (_, _) => _ = _manager.StopAllAsync());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => { _trayIcon.Visible = false; Application.Exit(); });
+        menu.Items.Add("종료", null, (_, _) => { _trayIcon.Visible = false; Application.Exit(); });
         return menu;
     }
 
@@ -206,7 +206,7 @@ public class MainForm : Form
     {
         var config = new BridgeConfig
         {
-            Name = $"Bridge {_manager.Bridges.Count + 1}"
+            Name = $"브릿지 {_manager.Bridges.Count + 1}"
         };
 
         using var dialog = new PortConfigDialog(config);
@@ -249,7 +249,7 @@ public class MainForm : Form
     {
         if (_selectedBridgeId == null) return;
 
-        var result = MessageBox.Show(this, "Remove this bridge port?", "Confirm",
+        var result = MessageBox.Show(this, "이 브릿지 포트를 삭제하시겠습니까?", "확인",
             MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (result != DialogResult.Yes) return;
 
@@ -263,7 +263,7 @@ public class MainForm : Form
     {
         if (_selectedBridgeId == null) return;
         try { await _manager.StartBridgeAsync(_selectedBridgeId); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "오류", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 
     private async void BtnStopSelected_Click(object? sender, EventArgs e)
@@ -286,7 +286,7 @@ public class MainForm : Form
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
             ConfigManager.ExportToFile(_manager.GetAllConfigs(), dialog.FileName);
-            MessageBox.Show(this, "Configuration exported.", "Export", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "설정을 내보냈습니다.", "내보내기", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 
@@ -308,11 +308,11 @@ public class MainForm : Form
             }
             RefreshPortList();
             SaveConfiguration();
-            MessageBox.Show(this, $"Imported {configs.Count} bridge(s).", "Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, $"{configs.Count}개의 브릿지를 가져왔습니다.", "가져오기", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"Import failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, $"가져오기 실패: {ex.Message}", "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -412,7 +412,7 @@ public class MainForm : Form
         var bridges = _manager.Bridges;
         int total = bridges.Count;
         int running = bridges.Values.Count(b => b.Status.State == BridgeState.Running);
-        _statusLabel.Text = $"Ports: {total}  |  Running: {running}  |  Available COM: {string.Join(", ", SerialPort.GetPortNames())}";
+        _statusLabel.Text = $"포트: {total}개  |  실행 중: {running}개  |  사용 가능 COM: {string.Join(", ", SerialPort.GetPortNames())}";
     }
 
     #endregion
@@ -455,8 +455,8 @@ public class MainForm : Form
 
         if (started > 0 || failed > 0)
         {
-            var msg = $"Auto-started {started} bridge(s)";
-            if (failed > 0) msg += $", {failed} failed";
+            var msg = $"{started}개 브릿지 자동 시작됨";
+            if (failed > 0) msg += $", {failed}개 실패";
             _statusLabel.Text = msg;
         }
     }
@@ -497,8 +497,8 @@ public class MainForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Failed to update startup registration: {ex.Message}",
-                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"자동실행 등록 실패: {ex.Message}",
+                "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -513,7 +513,7 @@ public class MainForm : Form
         {
             Hide();
             _trayIcon.Visible = true;
-            _trayIcon.ShowBalloonTip(1000, "COM-IP Bridge", "Running in background", ToolTipIcon.Info);
+            _trayIcon.ShowBalloonTip(1000, "COM-IP Bridge", "백그라운드에서 실행 중입니다.", ToolTipIcon.Info);
         }
     }
 
