@@ -1,4 +1,5 @@
 using System.IO.Ports;
+using Microsoft.Win32;
 using ComIpBridge.Core;
 using ComIpBridge.Models;
 using ComIpBridge.Utils;
@@ -67,6 +68,9 @@ public class MainForm : Form
         LoadConfiguration();
 
         UpdateStatusBar();
+
+        // Auto-start enabled bridges on launch
+        AutoStartBridges();
     }
 
     private void InitializeForm()
@@ -117,6 +121,19 @@ public class MainForm : Form
         var btnImport = new ToolStripButton("Import") { ToolTipText = "Import configuration" };
         btnImport.Click += BtnImport_Click;
 
+        var chkStartup = new ToolStripButton("Startup: OFF")
+        {
+            ToolTipText = "Toggle Windows startup registration",
+            CheckOnClick = true,
+            Checked = IsRegisteredInStartup()
+        };
+        chkStartup.Text = chkStartup.Checked ? "Startup: ON" : "Startup: OFF";
+        chkStartup.Click += (_, _) =>
+        {
+            SetStartupRegistration(chkStartup.Checked);
+            chkStartup.Text = chkStartup.Checked ? "Startup: ON" : "Startup: OFF";
+        };
+
         strip.Items.AddRange(new ToolStripItem[]
         {
             btnAdd, btnEdit, btnRemove,
@@ -125,7 +142,9 @@ public class MainForm : Form
             new ToolStripSeparator(),
             btnStartAll, btnStopAll,
             new ToolStripSeparator(),
-            btnExport, btnImport
+            btnExport, btnImport,
+            new ToolStripSeparator(),
+            chkStartup
         });
 
         return strip;
@@ -411,6 +430,76 @@ public class MainForm : Form
     private void SaveConfiguration()
     {
         ConfigManager.Save(_manager.GetAllConfigs());
+    }
+
+    private async void AutoStartBridges()
+    {
+        // Wait briefly for form to fully load
+        await Task.Delay(500);
+
+        int started = 0;
+        int failed = 0;
+        foreach (var (id, bridge) in _manager.Bridges)
+        {
+            if (!bridge.Config.Enabled) continue;
+            try
+            {
+                await _manager.StartBridgeAsync(id);
+                started++;
+            }
+            catch
+            {
+                failed++;
+            }
+        }
+
+        if (started > 0 || failed > 0)
+        {
+            var msg = $"Auto-started {started} bridge(s)";
+            if (failed > 0) msg += $", {failed} failed";
+            _statusLabel.Text = msg;
+        }
+    }
+
+    #endregion
+
+    #region Windows Startup
+
+    private const string StartupRegistryKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+    private const string AppRegistryName = "ComIpBridge";
+
+    private static bool IsRegisteredInStartup()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, false);
+            return key?.GetValue(AppRegistryName) != null;
+        }
+        catch { return false; }
+    }
+
+    private static void SetStartupRegistration(bool register)
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, true);
+            if (key == null) return;
+
+            if (register)
+            {
+                var exePath = Application.ExecutablePath;
+                key.SetValue(AppRegistryName, $"\"{exePath}\" --minimized");
+            }
+            else
+            {
+                key.DeleteValue(AppRegistryName, false);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to update startup registration: {ex.Message}",
+                "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     #endregion
