@@ -495,4 +495,6 @@ public class SerialBridge : IDisposable
         _cts?.Dispose();
         GC.SuppressFinalize(this);
     }
+
+    #endregion
 }
