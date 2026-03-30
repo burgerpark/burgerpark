@@ -9,6 +9,7 @@ namespace ComIpBridge.UI;
 public class MainForm : Form
 {
     private readonly BridgeManager _manager = new();
+    private readonly Com0ComManager _com0com = new();
 
     // Controls
     private readonly ListView _portListView;
@@ -75,7 +76,7 @@ public class MainForm : Form
 
     private void InitializeForm()
     {
-        Text = "COM-IP Bridge v1.0 - 멀티포트 시리얼 브릿지  |  BurgerPark";
+        Text = "COM-IP Bridge v2.0 - 멀티포트 시리얼 브릿지  |  BurgerPark";
         Size = new Size(900, 650);
         MinimumSize = new Size(700, 500);
         StartPosition = FormStartPosition.CenterScreen;
@@ -134,8 +135,17 @@ public class MainForm : Form
             chkStartup.Text = chkStartup.Checked ? "자동실행: ON" : "자동실행: OFF";
         };
 
+        var btnVirtualPort = new ToolStripButton("가상포트")
+        {
+            ToolTipText = "가상 COM 포트 생성/관리 (com0com)",
+            Font = new Font("Segoe UI", 9F, FontStyle.Bold)
+        };
+        btnVirtualPort.Click += BtnVirtualPort_Click;
+
         strip.Items.AddRange(new ToolStripItem[]
         {
+            btnVirtualPort,
+            new ToolStripSeparator(),
             btnAdd, btnEdit, btnRemove,
             new ToolStripSeparator(),
             btnStartSelected, btnStopSelected,
@@ -201,6 +211,30 @@ public class MainForm : Form
     #endregion
 
     #region Event Handlers
+
+    private void BtnVirtualPort_Click(object? sender, EventArgs e)
+    {
+        using var dialog = new VirtualPortDialog(_com0com);
+        dialog.ShowDialog(this);
+
+        // If a bridge config was auto-created, add it
+        if (dialog.CreatedBridgeConfig != null)
+        {
+            _manager.AddBridge(dialog.CreatedBridgeConfig);
+            RefreshPortList();
+            SaveConfiguration();
+
+            var result = MessageBox.Show(this,
+                $"브릿지 '{dialog.CreatedBridgeConfig.Name}'이 추가되었습니다.\n바로 시작하시겠습니까?",
+                "브릿지 자동 생성", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (result == DialogResult.Yes)
+            {
+                _ = _manager.StartBridgeAsync(dialog.CreatedBridgeConfig.Id);
+            }
+        }
+
+        UpdateStatusBar();
+    }
 
     private void BtnAdd_Click(object? sender, EventArgs e)
     {
