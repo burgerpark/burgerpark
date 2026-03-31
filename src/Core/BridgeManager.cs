@@ -8,10 +8,21 @@ public class BridgeManager : IDisposable
     private readonly Dictionary<string, SerialBridge> _bridges = new();
     private readonly object _lock = new();
     private readonly FileLogger _fileLogger = new();
+    private readonly System.Timers.Timer _watchdogTimer;
 
     public event Action? BridgesChanged;
     public event Action<string, BridgeStatus>? BridgeStatusChanged;
     public event Action<string, LogEntry>? BridgeLogAdded;
+    public event Action<string>? BridgeFaulted;
+
+    public BridgeManager()
+    {
+        // Watchdog: check every 15 seconds for dead bridges that should be running
+        _watchdogTimer = new System.Timers.Timer(15000);
+        _watchdogTimer.Elapsed += async (_, _) => await WatchdogCheckAsync();
+        _watchdogTimer.AutoReset = true;
+        _watchdogTimer.Start();
+    }
 
     public IReadOnlyDictionary<string, SerialBridge> Bridges
     {
@@ -28,6 +39,7 @@ public class BridgeManager : IDisposable
             var bridge = new SerialBridge(config, _fileLogger);
             bridge.StatusChanged += status => BridgeStatusChanged?.Invoke(config.Id, status);
             bridge.LogAdded += entry => BridgeLogAdded?.Invoke(config.Id, entry);
+            bridge.BridgeFaulted += name => BridgeFaulted?.Invoke(name);
             _bridges[config.Id] = bridge;
             BridgesChanged?.Invoke();
             return bridge;
@@ -90,8 +102,40 @@ public class BridgeManager : IDisposable
         lock (_lock) return _bridges.Values.Select(b => b.Config).ToList();
     }
 
+    private async Task WatchdogCheckAsync()
+    {
+        List<(string id, SerialBridge bridge)> deadBridges;
+        lock (_lock)
+        {
+            deadBridges = _bridges
+                .Where(kvp => kvp.Value.Config.Enabled
+                    && kvp.Value.Config.AutoReconnect
+                    && kvp.Value.Status.State == Models.BridgeState.Error)
+                .Select(kvp => (kvp.Key, kvp.Value))
+                .ToList();
+        }
+
+        foreach (var (id, bridge) in deadBridges)
+        {
+            try
+            {
+                _fileLogger.Log(bridge.Config.Name, "워치독: 장애 감지, 자동 재시작 시도");
+                await bridge.StopAsync();
+                await Task.Delay(1000);
+                await bridge.StartAsync();
+                _fileLogger.Log(bridge.Config.Name, "워치독: 재시작 성공");
+            }
+            catch (Exception ex)
+            {
+                _fileLogger.LogError(bridge.Config.Name, "워치독 재시작", ex);
+            }
+        }
+    }
+
     public void Dispose()
     {
+        _watchdogTimer.Stop();
+        _watchdogTimer.Dispose();
         lock (_lock)
         {
             foreach (var bridge in _bridges.Values)

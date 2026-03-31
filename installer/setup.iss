@@ -3,7 +3,7 @@
 ; Inno Setup 다운로드: https://jrsoftware.org/isdl.php
 
 #define MyAppName "COM-IP Bridge"
-#define MyAppVersion "2.0.0"
+#define MyAppVersion "3.0.0"
 #define MyAppPublisher "BurgerPark"
 #define MyAppExeName "ComIpBridge.exe"
 #define MyAppDescription "BurgerPark 멀티포트 COM-IP 브릿지"

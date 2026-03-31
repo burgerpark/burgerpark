@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.IO.Ports;
 using System.Net;
 using System.Net.Sockets;
@@ -15,10 +14,8 @@ public class SerialBridge : IDisposable
     private readonly object _logLock = new();
     private readonly FileLogger? _fileLogger;
 
-    // Pending data buffer for when TCP is disconnected
-    private readonly ConcurrentQueue<byte[]> _pendingDataQueue = new();
-    private long _pendingDataBytes;
-    private const long MaxPendingDataBytes = 10 * 1024 * 1024; // 10MB max buffer
+    // Crash-safe disk buffer for pending data when TCP is disconnected
+    private readonly DiskBuffer _diskBuffer;
 
     private SerialPort? _serialPort;
     private TcpListener? _tcpListener;
@@ -33,6 +30,7 @@ public class SerialBridge : IDisposable
 
     public event Action<BridgeStatus>? StatusChanged;
     public event Action<LogEntry>? LogAdded;
+    public event Action<string>? BridgeFaulted;
 
     public BridgeConfig Config => _config;
     public BridgeStatus Status => _status;
@@ -46,6 +44,14 @@ public class SerialBridge : IDisposable
         _config = config;
         _status = new BridgeStatus();
         _fileLogger = fileLogger;
+        _diskBuffer = new DiskBuffer(config.Id);
+
+        // Log if there's recovered data from a previous crash
+        if (_diskBuffer.HasData())
+        {
+            var count = _diskBuffer.Count;
+            _fileLogger?.Log(config.Name, $"이전 크래시에서 복구된 버퍼 데이터 {count}건 발견");
+        }
     }
 
     public async Task StartAsync()
@@ -73,6 +79,7 @@ public class SerialBridge : IDisposable
             UpdateStatus(BridgeState.Error, $"Start failed: {ex.Message}");
             _status.LastError = ex.Message;
             AddLog(LogDirection.System, null, $"Error: {ex.Message}");
+            BridgeFaulted?.Invoke(_config.Name);
             CleanupConnections();
             throw;
         }
@@ -192,6 +199,7 @@ public class SerialBridge : IDisposable
                 AddLog(LogDirection.System, null, $"Server error: {ex.Message}");
                 UpdateStatus(BridgeState.Error, $"Error: {ex.Message}");
                 _status.LastError = ex.Message;
+                BridgeFaulted?.Invoke(_config.Name);
 
                 _tcpListener?.Stop();
                 _tcpListener = null;
@@ -245,6 +253,7 @@ public class SerialBridge : IDisposable
                 if (ct.IsCancellationRequested) break;
                 AddLog(LogDirection.System, null, $"Connection error: {ex.Message}");
                 _status.LastError = ex.Message;
+                BridgeFaulted?.Invoke(_config.Name);
             }
             finally
             {
@@ -358,26 +367,29 @@ public class SerialBridge : IDisposable
     #region Bridge Loop (COM <-> TCP)
 
     /// <summary>
-    /// Send any buffered data that was queued while TCP was disconnected
+    /// Send any buffered data that was saved to disk while TCP was disconnected
     /// </summary>
     private async Task FlushPendingDataAsync(CancellationToken ct)
     {
+        if (!_diskBuffer.HasData()) return;
+
         int count = 0;
-        while (_pendingDataQueue.TryDequeue(out var data))
+        long totalBytes = 0;
+        foreach (var data in _diskBuffer.DequeueAll())
         {
             if (_networkStream != null)
             {
                 await _networkStream.WriteAsync(data, ct);
                 _status.BytesSent += data.Length;
-                Interlocked.Add(ref _pendingDataBytes, -data.Length);
+                totalBytes += data.Length;
                 count++;
             }
         }
         if (count > 0)
         {
             await _networkStream!.FlushAsync(ct);
-            AddLog(LogDirection.System, null, $"버퍼된 데이터 {count}건 전송 완료");
-            _fileLogger?.Log(_config.Name, $"버퍼된 데이터 {count}건 전송 완료");
+            AddLog(LogDirection.System, null, $"버퍼된 데이터 {count}건 ({totalBytes / 1024}KB) 전송 완료");
+            _fileLogger?.Log(_config.Name, $"버퍼된 데이터 {count}건 ({totalBytes / 1024}KB) 전송 완료");
         }
     }
 
@@ -535,18 +547,8 @@ public class SerialBridge : IDisposable
 
     private void EnqueuePendingData(byte[] data)
     {
-        if (Interlocked.Read(ref _pendingDataBytes) >= MaxPendingDataBytes)
-        {
-            // Buffer full - drop oldest data
-            _pendingDataQueue.TryDequeue(out var dropped);
-            if (dropped != null)
-                Interlocked.Add(ref _pendingDataBytes, -dropped.Length);
-            _fileLogger?.Log(_config.Name, $"경고: 버퍼 가득참 - 오래된 데이터 {dropped?.Length}B 삭제");
-        }
-
-        _pendingDataQueue.Enqueue(data);
-        Interlocked.Add(ref _pendingDataBytes, data.Length);
-        _status.StatusText = $"버퍼: {_pendingDataQueue.Count}건 ({Interlocked.Read(ref _pendingDataBytes) / 1024}KB)";
+        _diskBuffer.Enqueue(data);
+        _status.StatusText = $"버퍼: {_diskBuffer.Count}건 ({_diskBuffer.TotalBytes / 1024}KB) [디스크 저장]";
         StatusChanged?.Invoke(_status);
     }
 
@@ -612,6 +614,7 @@ public class SerialBridge : IDisposable
         _cts?.Cancel();
         CleanupConnections();
         _cts?.Dispose();
+        _diskBuffer.Dispose();
         GC.SuppressFinalize(this);
     }
 

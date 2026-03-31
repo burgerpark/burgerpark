@@ -10,6 +10,7 @@ public class MainForm : Form
 {
     private readonly BridgeManager _manager = new();
     private readonly Com0ComManager _com0com = new();
+    private readonly HealthCheckServer _healthCheck;
 
     // Controls
     private readonly ListView _portListView;
@@ -64,11 +65,16 @@ public class MainForm : Form
         // Events
         _manager.BridgeStatusChanged += OnBridgeStatusChanged;
         _manager.BridgeLogAdded += OnBridgeLogAdded;
+        _manager.BridgeFaulted += OnBridgeFaulted;
 
         // Load saved config
         LoadConfiguration();
 
         UpdateStatusBar();
+
+        // Health check endpoint (http://localhost:18080/health)
+        _healthCheck = new HealthCheckServer(_manager);
+        _healthCheck.TryStart();
 
         // Auto-start enabled bridges on launch
         AutoStartBridges();
@@ -76,7 +82,7 @@ public class MainForm : Form
 
     private void InitializeForm()
     {
-        Text = "COM-IP Bridge v2.0 - 멀티포트 시리얼 브릿지  |  BurgerPark";
+        Text = "COM-IP Bridge v3.0 - 멀티포트 시리얼 브릿지  |  BurgerPark";
         Size = new Size(900, 650);
         MinimumSize = new Size(700, 500);
         StartPosition = FormStartPosition.CenterScreen;
@@ -399,6 +405,23 @@ public class MainForm : Form
             _monitorPanel.AddLogEntry(entry);
     }
 
+    private void OnBridgeFaulted(string bridgeName)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(() => OnBridgeFaulted(bridgeName));
+            return;
+        }
+
+        // Tray notification
+        _trayIcon.Visible = true;
+        _trayIcon.ShowBalloonTip(5000, "브릿지 장애 발생",
+            $"'{bridgeName}' 브릿지에 오류가 발생했습니다.", ToolTipIcon.Error);
+
+        // System alert sound
+        System.Media.SystemSounds.Exclamation.Play();
+    }
+
     #endregion
 
     #region UI Refresh
@@ -618,7 +641,18 @@ public class MainForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         base.OnFormClosing(e);
+
+        // X button → minimize to tray instead of exit (prevent accidental closure)
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            WindowState = FormWindowState.Minimized;
+            return;
+        }
+
+        // Real exit (tray menu "종료" or Application.Exit)
         SaveConfiguration();
+        _healthCheck.Dispose();
         _manager.Dispose();
         _trayIcon.Visible = false;
         _trayIcon.Dispose();

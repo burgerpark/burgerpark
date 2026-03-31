@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ComIpBridge</AssemblyName>
     <RootNamespace>ComIpBridge</RootNamespace>
-    <Version>2.0.0</Version>
+    <Version>3.0.0</Version>
     <Authors>BurgerPark</Authors>
     <Company>BurgerPark</Company>
     <Copyright>Copyright (c) 2026 BurgerPark</Copyright>
