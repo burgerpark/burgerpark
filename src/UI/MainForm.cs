@@ -154,10 +154,26 @@ public class MainForm : Form
             new ToolStripSeparator(),
             btnExport, btnImport,
             new ToolStripSeparator(),
-            chkStartup
+            chkStartup,
+            new ToolStripSeparator(),
+            CreateLogButton()
         });
 
         return strip;
+    }
+
+    private ToolStripButton CreateLogButton()
+    {
+        var btn = new ToolStripButton("로그 폴더") { ToolTipText = "로그 파일 폴더 열기" };
+        btn.Click += (_, _) =>
+        {
+            var logDir = _manager.GetLogDirectory();
+            if (Directory.Exists(logDir))
+                System.Diagnostics.Process.Start("explorer.exe", logDir);
+            else
+                MessageBox.Show(this, $"로그 폴더: {logDir}\n아직 로그 파일이 없습니다.", "로그 폴더", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        };
+        return btn;
     }
 
     private StatusStrip CreateStatusStrip()

@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.IO.Ports;
 using System.Net;
 using System.Net.Sockets;
 using ComIpBridge.Models;
+using ComIpBridge.Utils;
 
 namespace ComIpBridge.Core;
 
@@ -11,6 +13,12 @@ public class SerialBridge : IDisposable
     private readonly BridgeStatus _status;
     private readonly List<LogEntry> _logBuffer = new();
     private readonly object _logLock = new();
+    private readonly FileLogger? _fileLogger;
+
+    // Pending data buffer for when TCP is disconnected
+    private readonly ConcurrentQueue<byte[]> _pendingDataQueue = new();
+    private long _pendingDataBytes;
+    private const long MaxPendingDataBytes = 10 * 1024 * 1024; // 10MB max buffer
 
     private SerialPort? _serialPort;
     private TcpListener? _tcpListener;
@@ -33,10 +41,11 @@ public class SerialBridge : IDisposable
         get { lock (_logLock) return _logBuffer.ToList(); }
     }
 
-    public SerialBridge(BridgeConfig config)
+    public SerialBridge(BridgeConfig config, FileLogger? fileLogger = null)
     {
         _config = config;
         _status = new BridgeStatus();
+        _fileLogger = fileLogger;
     }
 
     public async Task StartAsync()
@@ -155,6 +164,7 @@ public class SerialBridge : IDisposable
                     }
                     catch (OperationCanceledException) { break; }
 
+                    ConfigureTcpKeepalive(client);
                     var endpoint = client.Client.RemoteEndPoint?.ToString() ?? "unknown";
                     _status.RemoteEndpoint = endpoint;
                     _status.ConnectedSince = DateTime.Now;
@@ -217,6 +227,7 @@ public class SerialBridge : IDisposable
                 using var connectCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 connectCts.CancelAfter(10000);
                 await _tcpClient.ConnectAsync(_config.RemoteIp, _config.TcpPort, connectCts.Token);
+                ConfigureTcpKeepalive(_tcpClient);
 
                 _networkStream = _tcpClient.GetStream();
                 _status.RemoteEndpoint = $"{_config.RemoteIp}:{_config.TcpPort}";
@@ -346,8 +357,48 @@ public class SerialBridge : IDisposable
 
     #region Bridge Loop (COM <-> TCP)
 
+    /// <summary>
+    /// Send any buffered data that was queued while TCP was disconnected
+    /// </summary>
+    private async Task FlushPendingDataAsync(CancellationToken ct)
+    {
+        int count = 0;
+        while (_pendingDataQueue.TryDequeue(out var data))
+        {
+            if (_networkStream != null)
+            {
+                await _networkStream.WriteAsync(data, ct);
+                _status.BytesSent += data.Length;
+                Interlocked.Add(ref _pendingDataBytes, -data.Length);
+                count++;
+            }
+        }
+        if (count > 0)
+        {
+            await _networkStream!.FlushAsync(ct);
+            AddLog(LogDirection.System, null, $"버퍼된 데이터 {count}건 전송 완료");
+            _fileLogger?.Log(_config.Name, $"버퍼된 데이터 {count}건 전송 완료");
+        }
+    }
+
+    /// <summary>
+    /// Configure TCP keepalive to detect dead connections quickly
+    /// </summary>
+    private static void ConfigureTcpKeepalive(TcpClient client)
+    {
+        var socket = client.Client;
+        socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+        // Keepalive: start after 10s, interval 5s, retry 3 times
+        socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10);
+        socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5);
+        socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+    }
+
     private async Task RunBridgeLoopAsync(CancellationToken ct)
     {
+        // Send any data that was buffered while disconnected
+        await FlushPendingDataAsync(ct);
+
         DateTime lastActivity = DateTime.Now;
         var comToTcpTask = Task.Run(async () =>
         {
@@ -365,11 +416,37 @@ public class SerialBridge : IDisposable
                         if (available > 0)
                         {
                             int read = _serialPort.Read(buffer, 0, Math.Min(buffer.Length, available));
-                            if (read > 0 && _networkStream != null)
+                            if (read > 0)
                             {
-                                await _networkStream.WriteAsync(buffer.AsMemory(0, read), ct);
-                                await _networkStream.FlushAsync(ct);
-                                _status.BytesSent += read;
+                                var data = new byte[read];
+                                Array.Copy(buffer, data, read);
+
+                                // Log to file always
+                                _fileLogger?.LogData(_config.Name, "COM→TCP", buffer, read);
+
+                                if (_networkStream != null)
+                                {
+                                    try
+                                    {
+                                        await _networkStream.WriteAsync(data, ct);
+                                        await _networkStream.FlushAsync(ct);
+                                        _status.BytesSent += read;
+                                    }
+                                    catch (IOException)
+                                    {
+                                        // TCP broken - buffer the data for later
+                                        EnqueuePendingData(data);
+                                        AddLog(LogDirection.System, null, $"TCP 끊김 - 데이터 {read}B 버퍼에 저장됨");
+                                        _fileLogger?.Log(_config.Name, $"TCP 끊김 - 데이터 {read}B 버퍼 저장");
+                                        break;
+                                    }
+                                }
+                                else
+                                {
+                                    // No TCP connection - buffer the data
+                                    EnqueuePendingData(data);
+                                }
+
                                 lastActivity = DateTime.Now;
                                 OnDataTransferred(LogDirection.ComToTcp, buffer, read);
                                 StatusChanged?.Invoke(_status);
@@ -387,6 +464,7 @@ public class SerialBridge : IDisposable
                 catch (Exception ex)
                 {
                     AddLog(LogDirection.System, null, $"COM→TCP 오류: {ex.Message}");
+                    _fileLogger?.LogError(_config.Name, "COM→TCP", ex);
                     break;
                 }
             }
@@ -403,6 +481,8 @@ public class SerialBridge : IDisposable
                     int read = await _networkStream.ReadAsync(buffer, ct);
                     if (read == 0) break; // Connection closed
 
+                    _fileLogger?.LogData(_config.Name, "TCP→COM", buffer, read);
+
                     // Write in chunks to avoid overwhelming serial port
                     int offset = 0;
                     while (offset < read)
@@ -411,7 +491,6 @@ public class SerialBridge : IDisposable
                         _serialPort?.Write(buffer, offset, chunkSize);
                         offset += chunkSize;
 
-                        // Small delay between chunks for serial port to process
                         if (offset < read)
                             await Task.Delay(10, ct);
                     }
@@ -426,6 +505,7 @@ public class SerialBridge : IDisposable
                 catch (Exception ex)
                 {
                     AddLog(LogDirection.System, null, $"TCP→COM 오류: {ex.Message}");
+                    _fileLogger?.LogError(_config.Name, "TCP→COM", ex);
                     break;
                 }
             }
@@ -440,7 +520,7 @@ public class SerialBridge : IDisposable
                 await Task.Delay(1000, ct);
                 if ((DateTime.Now - lastActivity).TotalMilliseconds > _config.InactivityTimeoutMs)
                 {
-                    AddLog(LogDirection.System, null, "Inactivity timeout - disconnecting");
+                    AddLog(LogDirection.System, null, "비활성 타임아웃 - 연결 해제");
                     break;
                 }
             }
@@ -452,6 +532,23 @@ public class SerialBridge : IDisposable
     #endregion
 
     #region Helpers
+
+    private void EnqueuePendingData(byte[] data)
+    {
+        if (Interlocked.Read(ref _pendingDataBytes) >= MaxPendingDataBytes)
+        {
+            // Buffer full - drop oldest data
+            _pendingDataQueue.TryDequeue(out var dropped);
+            if (dropped != null)
+                Interlocked.Add(ref _pendingDataBytes, -dropped.Length);
+            _fileLogger?.Log(_config.Name, $"경고: 버퍼 가득참 - 오래된 데이터 {dropped?.Length}B 삭제");
+        }
+
+        _pendingDataQueue.Enqueue(data);
+        Interlocked.Add(ref _pendingDataBytes, data.Length);
+        _status.StatusText = $"버퍼: {_pendingDataQueue.Count}건 ({Interlocked.Read(ref _pendingDataBytes) / 1024}KB)";
+        StatusChanged?.Invoke(_status);
+    }
 
     private void OnDataTransferred(LogDirection direction, byte[] buffer, int count)
     {

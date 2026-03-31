@@ -1,4 +1,5 @@
 using ComIpBridge.Models;
+using ComIpBridge.Utils;
 
 namespace ComIpBridge.Core;
 
@@ -6,6 +7,7 @@ public class BridgeManager : IDisposable
 {
     private readonly Dictionary<string, SerialBridge> _bridges = new();
     private readonly object _lock = new();
+    private readonly FileLogger _fileLogger = new();
 
     public event Action? BridgesChanged;
     public event Action<string, BridgeStatus>? BridgeStatusChanged;
@@ -23,7 +25,7 @@ public class BridgeManager : IDisposable
             if (_bridges.ContainsKey(config.Id))
                 throw new InvalidOperationException($"Bridge {config.Id} already exists");
 
-            var bridge = new SerialBridge(config);
+            var bridge = new SerialBridge(config, _fileLogger);
             bridge.StatusChanged += status => BridgeStatusChanged?.Invoke(config.Id, status);
             bridge.LogAdded += entry => BridgeLogAdded?.Invoke(config.Id, entry);
             _bridges[config.Id] = bridge;
@@ -99,6 +101,9 @@ public class BridgeManager : IDisposable
             }
             _bridges.Clear();
         }
+        _fileLogger.Dispose();
         GC.SuppressFinalize(this);
     }
+
+    public string GetLogDirectory() => _fileLogger.GetLogDirectory();
 }
