@@ -83,8 +83,8 @@ public class SerialBridge : IDisposable
             catch { /* timeout or cancelled, ok */ }
         }
 
-        UpdateStatus(BridgeState.Stopped, "Stopped");
-        AddLog(LogDirection.System, null, "Bridge stopped");
+        UpdateStatus(BridgeState.Stopped, "정지됨");
+        AddLog(LogDirection.System, null, "브릿지 정지됨");
     }
 
     public void ClearLog()
@@ -113,10 +113,11 @@ public class SerialBridge : IDisposable
                 FlowControlType.XonXoff => Handshake.XOnXOff,
                 _ => Handshake.None
             },
-            ReadTimeout = 100,
-            WriteTimeout = 5000,
-            ReadBufferSize = 65536,
-            WriteBufferSize = 65536
+            ReadTimeout = 500,
+            WriteTimeout = 10000,
+            ReadBufferSize = 131072,  // 128KB
+            WriteBufferSize = 131072, // 128KB
+            ReceivedBytesThreshold = 1
         };
 
         if (_config.FlowControl == FlowControlType.DtrDsr)
@@ -125,7 +126,9 @@ public class SerialBridge : IDisposable
         }
 
         _serialPort.Open();
-        AddLog(LogDirection.System, null, $"Serial port {_config.ComPort} opened ({_config.BaudRate} baud)");
+        _serialPort.DiscardInBuffer();
+        _serialPort.DiscardOutBuffer();
+        AddLog(LogDirection.System, null, $"시리얼 포트 {_config.ComPort} 열림 ({_config.BaudRate} baud, 버퍼 128KB)");
     }
 
     #region TCP Server Mode
@@ -348,27 +351,34 @@ public class SerialBridge : IDisposable
         DateTime lastActivity = DateTime.Now;
         var comToTcpTask = Task.Run(async () =>
         {
-            var buffer = new byte[4096];
+            var buffer = new byte[65536];
             while (!ct.IsCancellationRequested)
             {
                 try
                 {
                     if (_serialPort?.BytesToRead > 0)
                     {
-                        int read = _serialPort.Read(buffer, 0, Math.Min(buffer.Length, _serialPort.BytesToRead));
-                        if (read > 0 && _networkStream != null)
+                        // Wait briefly for more data to arrive (receipt data comes in bursts)
+                        await Task.Delay(50, ct);
+
+                        int available = _serialPort.BytesToRead;
+                        if (available > 0)
                         {
-                            await _networkStream.WriteAsync(buffer.AsMemory(0, read), ct);
-                            await _networkStream.FlushAsync(ct);
-                            _status.BytesSent += read;
-                            lastActivity = DateTime.Now;
-                            OnDataTransferred(LogDirection.ComToTcp, buffer, read);
-                            StatusChanged?.Invoke(_status);
+                            int read = _serialPort.Read(buffer, 0, Math.Min(buffer.Length, available));
+                            if (read > 0 && _networkStream != null)
+                            {
+                                await _networkStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                                await _networkStream.FlushAsync(ct);
+                                _status.BytesSent += read;
+                                lastActivity = DateTime.Now;
+                                OnDataTransferred(LogDirection.ComToTcp, buffer, read);
+                                StatusChanged?.Invoke(_status);
+                            }
                         }
                     }
                     else
                     {
-                        await Task.Delay(5, ct);
+                        await Task.Delay(10, ct);
                     }
                 }
                 catch (OperationCanceledException) { break; }
@@ -376,7 +386,7 @@ public class SerialBridge : IDisposable
                 catch (IOException) { break; }
                 catch (Exception ex)
                 {
-                    AddLog(LogDirection.System, null, $"COM→TCP error: {ex.Message}");
+                    AddLog(LogDirection.System, null, $"COM→TCP 오류: {ex.Message}");
                     break;
                 }
             }
@@ -384,7 +394,7 @@ public class SerialBridge : IDisposable
 
         var tcpToComTask = Task.Run(async () =>
         {
-            var buffer = new byte[4096];
+            var buffer = new byte[65536];
             while (!ct.IsCancellationRequested)
             {
                 try
@@ -393,7 +403,19 @@ public class SerialBridge : IDisposable
                     int read = await _networkStream.ReadAsync(buffer, ct);
                     if (read == 0) break; // Connection closed
 
-                    _serialPort?.Write(buffer, 0, read);
+                    // Write in chunks to avoid overwhelming serial port
+                    int offset = 0;
+                    while (offset < read)
+                    {
+                        int chunkSize = Math.Min(read - offset, _serialPort?.WriteBufferSize ?? 4096);
+                        _serialPort?.Write(buffer, offset, chunkSize);
+                        offset += chunkSize;
+
+                        // Small delay between chunks for serial port to process
+                        if (offset < read)
+                            await Task.Delay(10, ct);
+                    }
+
                     _status.BytesReceived += read;
                     lastActivity = DateTime.Now;
                     OnDataTransferred(LogDirection.TcpToCom, buffer, read);
@@ -403,7 +425,7 @@ public class SerialBridge : IDisposable
                 catch (IOException) { break; }
                 catch (Exception ex)
                 {
-                    AddLog(LogDirection.System, null, $"TCP→COM error: {ex.Message}");
+                    AddLog(LogDirection.System, null, $"TCP→COM 오류: {ex.Message}");
                     break;
                 }
             }
