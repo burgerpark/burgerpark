@@ -512,22 +512,62 @@ public class MainForm : Form
         catch { return false; }
     }
 
+    private static string? GetRegisteredPath()
+    {
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, false);
+            return key?.GetValue(AppRegistryName) as string;
+        }
+        catch { return null; }
+    }
+
     private static void SetStartupRegistration(bool register)
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, true);
-            if (key == null) return;
+            if (key == null)
+            {
+                MessageBox.Show("레지스트리 키를 열 수 없습니다.\n관리자 권한으로 실행해보세요.",
+                    "오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
 
             if (register)
             {
-                var exePath = Application.ExecutablePath;
-                key.SetValue(AppRegistryName, $"\"{exePath}\" --minimized");
+                // Environment.ProcessPath is more reliable for single-file published apps
+                var exePath = Environment.ProcessPath ?? Application.ExecutablePath;
+                var command = $"\"{exePath}\" --minimized";
+                key.SetValue(AppRegistryName, command, RegistryValueKind.String);
+
+                // Verify
+                var saved = key.GetValue(AppRegistryName) as string;
+                if (saved == command)
+                {
+                    MessageBox.Show(
+                        $"자동실행이 등록되었습니다.\n\n" +
+                        $"등록 경로:\n{command}\n\n" +
+                        $"Windows 시작 시 트레이에서 자동으로 실행됩니다.",
+                        "자동실행 등록 완료", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("레지스트리에 기록했지만 확인에 실패했습니다.\n수동으로 확인해주세요.",
+                        "경고", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
             else
             {
                 key.DeleteValue(AppRegistryName, false);
+                MessageBox.Show("자동실행이 해제되었습니다.",
+                    "자동실행 해제", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            MessageBox.Show("레지스트리 접근 권한이 없습니다.\n관리자 권한으로 실행해주세요.",
+                "권한 오류", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         catch (Exception ex)
         {
