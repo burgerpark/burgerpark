@@ -23,7 +23,7 @@ public class HealthCheckServer : IDisposable
         _manager = manager;
         Port = port;
         _listener = new HttpListener();
-        _listener.Prefixes.Add($"http://+:{port}/");
+        _listener.Prefixes.Add($"http://localhost:{port}/");
     }
 
     public bool TryStart()

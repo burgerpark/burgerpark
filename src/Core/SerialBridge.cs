@@ -199,12 +199,15 @@ public class SerialBridge : IDisposable
                 AddLog(LogDirection.System, null, $"Server error: {ex.Message}");
                 UpdateStatus(BridgeState.Error, $"Error: {ex.Message}");
                 _status.LastError = ex.Message;
-                BridgeFaulted?.Invoke(_config.Name);
 
                 _tcpListener?.Stop();
                 _tcpListener = null;
 
-                if (!_config.AutoReconnect) break;
+                if (!_config.AutoReconnect)
+                {
+                    BridgeFaulted?.Invoke(_config.Name);
+                    break;
+                }
                 UpdateStatus(BridgeState.Reconnecting, "Reconnecting...");
                 try { await Task.Delay(_config.ReconnectIntervalMs, ct); }
                 catch (OperationCanceledException) { break; }
@@ -253,7 +256,9 @@ public class SerialBridge : IDisposable
                 if (ct.IsCancellationRequested) break;
                 AddLog(LogDirection.System, null, $"Connection error: {ex.Message}");
                 _status.LastError = ex.Message;
-                BridgeFaulted?.Invoke(_config.Name);
+                // Only alert if not auto-reconnecting (avoid notification spam)
+                if (!_config.AutoReconnect)
+                    BridgeFaulted?.Invoke(_config.Name);
             }
             finally
             {
@@ -424,10 +429,13 @@ public class SerialBridge : IDisposable
                         // Wait briefly for more data to arrive (receipt data comes in bursts)
                         await Task.Delay(50, ct);
 
-                        int available = _serialPort.BytesToRead;
+                        var port = _serialPort;
+                        if (port == null) break;
+
+                        int available = port.BytesToRead;
                         if (available > 0)
                         {
-                            int read = _serialPort.Read(buffer, 0, Math.Min(buffer.Length, available));
+                            int read = port.Read(buffer, 0, Math.Min(buffer.Length, available));
                             if (read > 0)
                             {
                                 var data = new byte[read];

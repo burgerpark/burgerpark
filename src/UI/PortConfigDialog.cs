@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Ports;
 using ComIpBridge.Models;
 
@@ -185,7 +186,7 @@ public class PortConfigDialog : Form
         _config.TcpPort = (int)_nudPort.Value;
         _config.BaudRate = baudRate;
         _config.DataBits = int.Parse(_cboDataBits.Text);
-        _config.StopBits = float.Parse(_cboStopBits.Text);
+        _config.StopBits = float.Parse(_cboStopBits.Text, CultureInfo.InvariantCulture);
         _config.Parity = _cboParity.Text;
         _config.FlowControl = (FlowControlType)_cboFlowControl.SelectedIndex;
         _config.AutoReconnect = _chkAutoReconnect.Checked;

@@ -401,6 +401,12 @@ public class MainForm : Form
 
     private void OnBridgeLogAdded(string id, LogEntry entry)
     {
+        if (InvokeRequired)
+        {
+            try { BeginInvoke(() => OnBridgeLogAdded(id, entry)); }
+            catch { /* form closing */ }
+            return;
+        }
         if (_selectedBridgeId == id)
             _monitorPanel.AddLogEntry(entry);
     }
@@ -549,16 +555,6 @@ public class MainForm : Form
             return key?.GetValue(AppRegistryName) != null;
         }
         catch { return false; }
-    }
-
-    private static string? GetRegisteredPath()
-    {
-        try
-        {
-            using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, false);
-            return key?.GetValue(AppRegistryName) as string;
-        }
-        catch { return null; }
     }
 
     private static void SetStartupRegistration(bool register)

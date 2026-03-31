@@ -9,6 +9,7 @@ public class BridgeManager : IDisposable
     private readonly object _lock = new();
     private readonly FileLogger _fileLogger = new();
     private readonly System.Timers.Timer _watchdogTimer;
+    private int _watchdogRunning;
 
     public event Action? BridgesChanged;
     public event Action<string, BridgeStatus>? BridgeStatusChanged;
@@ -103,6 +104,22 @@ public class BridgeManager : IDisposable
     }
 
     private async Task WatchdogCheckAsync()
+    {
+        // Prevent re-entry if previous check is still running
+        if (Interlocked.CompareExchange(ref _watchdogRunning, 1, 0) != 0)
+            return;
+
+        try
+        {
+            await WatchdogCheckCoreAsync();
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _watchdogRunning, 0);
+        }
+    }
+
+    private async Task WatchdogCheckCoreAsync()
     {
         List<(string id, SerialBridge bridge)> deadBridges;
         lock (_lock)

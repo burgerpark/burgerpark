@@ -61,30 +61,32 @@ public class DiskBuffer : IDisposable
 
     /// <summary>
     /// Read and remove all buffered data in chronological order.
+    /// Returns a materialized list so the lock is NOT held during enumeration.
     /// </summary>
-    public IEnumerable<byte[]> DequeueAll()
+    public List<byte[]> DequeueAll()
     {
         lock (_lock)
         {
-            if (!Directory.Exists(_bufferDir)) yield break;
+            var result = new List<byte[]>();
+            if (!Directory.Exists(_bufferDir)) return result;
 
             var files = Directory.GetFiles(_bufferDir, "*.buf");
             Array.Sort(files); // Sorted by timestamp in filename
 
             foreach (var file in files)
             {
-                byte[]? data = null;
                 try
                 {
-                    data = File.ReadAllBytes(file);
+                    var data = File.ReadAllBytes(file);
                     File.Delete(file);
                     _totalBytes -= data.Length;
+                    if (data.Length > 0)
+                        result.Add(data);
                 }
                 catch { continue; }
-
-                if (data != null && data.Length > 0)
-                    yield return data;
             }
+
+            return result;
         }
     }
 
