@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>COM-IP Bridge - Download</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background: #0b0e17;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #0d1321, #1b2838, #0d1321);
+      border-bottom: 1px solid #1e3a5f;
+      padding: 40px 20px 50px;
+      text-align: center;
+    }
+
+    .header-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #00b4d8, #0077b6);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .header h1 {
+      font-size: 2.8rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #00b4d8, #48cae4, #90e0ef);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 12px;
+    }
+
+    .header p {
+      font-size: 1.1rem;
+      color: #8899aa;
+      max-width: 600px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+
+    /* Container */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 40px 20px 60px;
+    }
+
+    /* Download Cards */
+    .download-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 50px;
+    }
+
+    @media (max-width: 640px) {
+      .download-section { grid-template-columns: 1fr; }
+      .header h1 { font-size: 2rem; }
+    }
+
+    .download-card {
+      background: linear-gradient(145deg, #131a2a, #0f1520);
+      border: 1px solid #1e3a5f;
+      border-radius: 16px;
+      padding: 32px 28px;
+      text-align: center;
+      transition: transform 0.2s, border-color 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .download-card:hover {
+      transform: translateY(-4px);
+      border-color: #00b4d8;
+    }
+
+    .download-card.recommended {
+      border-color: #00b4d8;
+    }
+
+    .download-card.recommended::before {
+      content: 'RECOMMENDED';
+      position: absolute;
+      top: 14px;
+      right: -30px;
+      background: linear-gradient(135deg, #00b4d8, #0077b6);
+      color: #fff;
+      font-size: 0.6rem;
+      font-weight: 700;
+      padding: 4px 40px;
+      transform: rotate(45deg);
+      letter-spacing: 1px;
+    }
+
+    .card-icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+
+    .card-desc {
+      font-size: 0.9rem;
+      color: #8899aa;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .card-filename {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: #4a6a8a;
+      margin-bottom: 20px;
+      word-break: break-all;
+    }
+
+    .download-btn {
+      display: inline-block;
+      background: linear-gradient(135deg, #00b4d8, #0077b6);
+      color: #fff;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 14px 36px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: opacity 0.2s, transform 0.1s;
+      width: 100%;
+    }
+
+    .download-btn:hover { opacity: 0.9; }
+    .download-btn:active { transform: scale(0.98); }
+
+    .download-btn.secondary {
+      background: transparent;
+      border: 2px solid #1e3a5f;
+      color: #48cae4;
+    }
+
+    .download-btn.secondary:hover { border-color: #00b4d8; }
+
+    .download-btn.disabled {
+      background: #1e2a3a;
+      color: #4a6a8a;
+      cursor: not-allowed;
+    }
+
+    /* Version info */
+    .version-info {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .version-tag {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      color: #48cae4;
+      background: rgba(0, 180, 216, 0.1);
+      border: 1px solid rgba(0, 180, 216, 0.3);
+      padding: 6px 16px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .version-date {
+      font-size: 0.85rem;
+      color: #4a6a8a;
+    }
+
+    /* Features */
+    .features {
+      margin-bottom: 50px;
+    }
+
+    .features h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #1e2a3a;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+
+    .feature-item {
+      background: #0f1520;
+      border: 1px solid #1a2535;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .feature-item h3 {
+      font-size: 0.95rem;
+      color: #48cae4;
+      margin-bottom: 6px;
+    }
+
+    .feature-item p {
+      font-size: 0.85rem;
+      color: #6a8aaa;
+      line-height: 1.5;
+    }
+
+    /* Requirements */
+    .requirements {
+      background: #0f1520;
+      border: 1px solid #1a2535;
+      border-radius: 12px;
+      padding: 28px;
+      margin-bottom: 40px;
+    }
+
+    .requirements h2 {
+      font-size: 1.1rem;
+      color: #fff;
+      margin-bottom: 16px;
+    }
+
+    .req-list {
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .req-list li {
+      font-size: 0.9rem;
+      color: #8899aa;
+      padding-left: 24px;
+      position: relative;
+    }
+
+    .req-list li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      color: #00b4d8;
+      font-weight: 700;
+    }
+
+    /* Status */
+    .status-bar {
+      text-align: center;
+      padding: 16px;
+      font-size: 0.85rem;
+      color: #4a6a8a;
+    }
+
+    .status-bar a {
+      color: #48cae4;
+      text-decoration: none;
+    }
+
+    .status-bar a:hover { text-decoration: underline; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #1e3a5f;
+      border-top-color: #00b4d8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 8px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text { color: #4a6a8a; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="header-badge">Windows Application</div>
+    <h1>COM-IP Bridge</h1>
+    <p>VSP3 스타일 멀티포트 COM ↔ TCP/IP 브릿지 프로그램.<br>
+      여러 시리얼 포트를 동시에 네트워크로 연결하세요.</p>
+  </div>
+
+  <div class="container">
+
+    <!-- Version Info (dynamic) -->
+    <div class="version-info" id="versionInfo">
+      <div class="spinner"></div>
+      <span class="loading-text">최신 버전 확인 중...</span>
+    </div>
+
+    <!-- Download Cards -->
+    <div class="download-section">
+      <div class="download-card recommended">
+        <div class="card-icon">🖥️</div>
+        <div class="card-title">설치 파일</div>
+        <div class="card-desc">
+          설치 마법사로 간편 설치.<br>
+          바탕화면 아이콘, 시작 메뉴, 자동 실행 설정 포함.
+        </div>
+        <div class="card-filename" id="installerFilename">ComIpBridge_Setup.exe</div>
+        <a id="installerBtn" class="download-btn disabled" href="#" onclick="return false;">
+          준비 중...
+        </a>
+      </div>
+
+      <div class="download-card">
+        <div class="card-icon">📦</div>
+        <div class="card-title">포터블 (ZIP)</div>
+        <div class="card-desc">
+          설치 없이 압축 해제 후 바로 실행.<br>
+          USB에 넣어 어디서든 사용 가능.
+        </div>
+        <div class="card-filename" id="portableFilename">ComIpBridge_Portable_win-x64.zip</div>
+        <a id="portableBtn" class="download-btn secondary disabled" href="#" onclick="return false;">
+          준비 중...
+        </a>
+      </div>
+    </div>
+
+    <!-- Features -->
+    <div class="features">
+      <h2>주요 기능</h2>
+      <div class="feature-grid">
+        <div class="feature-item">
+          <h3>멀티포트 동시 운영</h3>
+          <p>포트 개수 제한 없이 여러 COM-IP 브릿지를 동시에 운영할 수 있습니다.</p>
+        </div>
+        <div class="feature-item">
+          <h3>TCP Server / Client / UDP</h3>
+          <p>서버, 클라이언트, UDP 모드를 포트별로 독립 설정 가능합니다.</p>
+        </div>
+        <div class="feature-item">
+          <h3>자동 재연결</h3>
+          <p>연결 끊김 시 설정한 간격으로 자동 복구합니다.</p>
+        </div>
+        <div class="feature-item">
+          <h3>실시간 데이터 모니터</h3>
+          <p>Hex/ASCII 데이터를 실시간으로 확인. 방향별 색상 구분.</p>
+        </div>
+        <div class="feature-item">
+          <h3>시스템 트레이</h3>
+          <p>최소화 시 트레이로 이동. 백그라운드에서 조용히 동작합니다.</p>
+        </div>
+        <div class="feature-item">
+          <h3>설정 내보내기 / 가져오기</h3>
+          <p>JSON 파일로 설정을 저장하고 다른 PC로 이동 가능합니다.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Requirements -->
+    <div class="requirements">
+      <h2>시스템 요구사항</h2>
+      <ul class="req-list">
+        <li>Windows 10 / 11 (64-bit)</li>
+        <li>.NET 런타임 불필요 (자체 포함)</li>
+        <li>COM 포트 장치 (USB-Serial 어댑터 등)</li>
+        <li>네트워크 연결 (TCP/IP 통신용)</li>
+      </ul>
+    </div>
+
+    <!-- Status -->
+    <div class="status-bar">
+      <a href="https://github.com/burgerpark/burgerpark" target="_blank">GitHub Repository</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/burgerpark/burgerpark/actions" target="_blank">Build Status</a>
+      &nbsp;·&nbsp;
+      <a href="https://github.com/burgerpark/burgerpark/releases" target="_blank">All Releases</a>
+    </div>
+
+  </div>
+
+  <script>
+    const REPO_OWNER = 'burgerpark';
+    const REPO_NAME = 'burgerpark';
+
+    async function loadRelease() {
+      const versionInfo = document.getElementById('versionInfo');
+      const installerBtn = document.getElementById('installerBtn');
+      const portableBtn = document.getElementById('portableBtn');
+      const installerFilename = document.getElementById('installerFilename');
+      const portableFilename = document.getElementById('portableFilename');
+
+      try {
+        // Try latest release first
+        const res = await fetch(
+          `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`
+        );
+
+        if (!res.ok) {
+          // No release yet - show Actions artifacts link
+          showNoRelease();
+          return;
+        }
+
+        const release = await res.json();
+        const version = release.tag_name;
+        const date = new Date(release.published_at).toLocaleDateString('ko-KR');
+
+        // Update version info
+        versionInfo.innerHTML = `
+          <div class="version-tag">${version}</div>
+          <div class="version-date">Released: ${date}</div>
+        `;
+
+        // Find assets
+        let installerAsset = null;
+        let portableAsset = null;
+
+        for (const asset of release.assets) {
+          const name = asset.name.toLowerCase();
+          if (name.includes('setup') && name.endsWith('.exe')) {
+            installerAsset = asset;
+          } else if (name.includes('portable') && name.endsWith('.zip')) {
+            portableAsset = asset;
+          }
+        }
+
+        // Update installer button
+        if (installerAsset) {
+          const sizeMB = (installerAsset.size / 1024 / 1024).toFixed(1);
+          installerFilename.textContent = installerAsset.name;
+          installerBtn.href = installerAsset.browser_download_url;
+          installerBtn.className = 'download-btn';
+          installerBtn.textContent = `다운로드 (${sizeMB} MB)`;
+          installerBtn.onclick = null;
+        } else {
+          installerBtn.textContent = '설치 파일 없음';
+        }
+
+        // Update portable button
+        if (portableAsset) {
+          const sizeMB = (portableAsset.size / 1024 / 1024).toFixed(1);
+          portableFilename.textContent = portableAsset.name;
+          portableBtn.href = portableAsset.browser_download_url;
+          portableBtn.className = 'download-btn secondary';
+          portableBtn.textContent = `다운로드 (${sizeMB} MB)`;
+          portableBtn.onclick = null;
+        } else {
+          portableBtn.textContent = '포터블 파일 없음';
+        }
+
+      } catch (err) {
+        console.error('Failed to load release:', err);
+        showNoRelease();
+      }
+    }
+
+    function showNoRelease() {
+      const versionInfo = document.getElementById('versionInfo');
+      const installerBtn = document.getElementById('installerBtn');
+      const portableBtn = document.getElementById('portableBtn');
+
+      versionInfo.innerHTML = `
+        <div class="version-tag">빌드 대기 중</div>
+        <div class="version-date">GitHub Actions에서 빌드가 완료되면 자동으로 다운로드 가능합니다.</div>
+      `;
+
+      const actionsUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/actions`;
+      const releasesUrl = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`;
+
+      installerBtn.href = actionsUrl;
+      installerBtn.className = 'download-btn';
+      installerBtn.textContent = 'GitHub Actions에서 다운로드';
+      installerBtn.target = '_blank';
+      installerBtn.onclick = null;
+
+      portableBtn.href = releasesUrl;
+      portableBtn.className = 'download-btn secondary';
+      portableBtn.textContent = 'Releases 페이지 확인';
+      portableBtn.target = '_blank';
+      portableBtn.onclick = null;
+    }
+
+    // Load on page ready
+    loadRelease();
+  </script>
+</body>
+</html>

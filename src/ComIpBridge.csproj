@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ComIpBridge</AssemblyName>
+    <RootNamespace>ComIpBridge</RootNamespace>
+    <Version>3.0.0</Version>
+    <Authors>BurgerPark</Authors>
+    <Company>BurgerPark</Company>
+    <Copyright>Copyright (c) 2026 BurgerPark</Copyright>
+    <Description>BurgerPark COM-IP Bridge - 멀티포트 시리얼 브릿지</Description>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="8.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+</Project>

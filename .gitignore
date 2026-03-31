@@ -1,0 +1,21 @@
+## .NET
+bin/
+obj/
+publish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+## NuGet
+packages/
+*.nupkg
+
+## Build output
+installer/Output/
+
+## OS
+Thumbs.db
+Desktop.ini
+.DS_Store
