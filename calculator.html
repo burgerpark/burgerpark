@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>배달앱 순이익 결산 계산기</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-2: #273349;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #fbbf24;
+      --accent-2: #f97316;
+      --good: #10b981;
+      --bad: #ef4444;
+      --baemin: #2ac1bc;
+      --coupang: #e62e2e;
+      --yogiyo: #fa0050;
+      --etc: #6366f1;
+    }
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans KR', sans-serif;
+      min-height: 100vh;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    header {
+      margin-bottom: 24px;
+      padding: 20px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .section h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .section h2 .tag {
+      font-size: 0.7rem;
+      background: var(--panel-2);
+      color: var(--muted);
+      padding: 4px 10px;
+      border-radius: 10px;
+      font-weight: 500;
+    }
+    label {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    input[type="text"], input[type="number"], select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    input[type="number"] { text-align: right; font-variant-numeric: tabular-nums; }
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    .grid-4 { grid-template-columns: repeat(4, 1fr); }
+    @media (max-width: 700px) {
+      .grid-3, .grid-4 { grid-template-columns: repeat(2, 1fr); }
+    }
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: transform 0.1s, opacity 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #1a1a2e;
+    }
+    .btn-ghost {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px dashed var(--border);
+    }
+    .btn-danger {
+      background: rgba(239,68,68,0.15);
+      color: var(--bad);
+    }
+    .platform-card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--etc);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .platform-card[data-platform="baemin"] { border-left-color: var(--baemin); }
+    .platform-card[data-platform="coupang"] { border-left-color: var(--coupang); }
+    .platform-card[data-platform="yogiyo"] { border-left-color: var(--yogiyo); }
+    .platform-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      gap: 8px;
+    }
+    .platform-title {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+    .advanced {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--border);
+    }
+    .advanced summary {
+      font-size: 0.82rem;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: 10px;
+      user-select: none;
+    }
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 6px;
+      cursor: pointer;
+    }
+    .checkbox-row input { width: auto; }
+    .cost-row {
+      display: grid;
+      grid-template-columns: 1fr 160px 40px;
+      gap: 8px;
+      margin-bottom: 8px;
+      align-items: center;
+    }
+    .cost-row .btn-danger {
+      padding: 8px 10px;
+      font-size: 0.85rem;
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 600px) { .summary-grid { grid-template-columns: 1fr; } }
+    .stat {
+      background: var(--panel-2);
+      padding: 14px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .stat-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-value.good { color: var(--good); }
+    .stat-value.bad { color: var(--bad); }
+    .stat-value.accent { color: var(--accent); }
+    .stat-sub {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 10px;
+    }
+    th, td {
+      padding: 10px 8px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+      font-variant-numeric: tabular-nums;
+    }
+    th:first-child, td:first-child { text-align: left; }
+    th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.8rem;
+    }
+    tr.total td {
+      font-weight: 700;
+      border-top: 2px solid var(--border);
+      border-bottom: none;
+      padding-top: 12px;
+    }
+    .hint {
+      background: rgba(251,191,36,0.08);
+      border-left: 3px solid var(--accent);
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: #fde68a;
+      margin-bottom: 14px;
+      line-height: 1.6;
+    }
+    .hint code {
+      background: rgba(0,0,0,0.3);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: ui-monospace, monospace;
+    }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .profit-big {
+      background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.04));
+      border: 1px solid rgba(16,185,129,0.3);
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .profit-big.loss {
+      background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04));
+      border-color: rgba(239,68,68,0.3);
+    }
+    .profit-big .big-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .profit-big .big-value {
+      font-size: 2.2rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      color: var(--good);
+    }
+    .profit-big.loss .big-value { color: var(--bad); }
+    .profit-big .big-sub {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📊 배달앱 순이익 결산 계산기</h1>
+      <div class="subtitle">배민 · 쿠팡이츠 · 요기요 수수료 + 광고비 + 고정비까지 한번에</div>
+    </header>
+
+    <!-- 매장 정보 -->
+    <section class="section">
+      <h2>🏪 매장 정보</h2>
+      <div class="grid grid-2">
+        <div>
+          <label>매장명</label>
+          <input type="text" id="storeName" placeholder="예: 버거파크 강남점">
+        </div>
+        <div>
+          <label>식자재 원가율 (%)</label>
+          <input type="number" id="cogsRate" value="35" step="0.1" min="0" max="100">
+        </div>
+      </div>
+    </section>
+
+    <!-- 플랫폼별 매출 -->
+    <section class="section">
+      <h2>
+        📱 플랫폼별 월 매출
+        <span class="tag">다중 플랫폼 추가 가능</span>
+      </h2>
+      <div class="hint">
+        💡 <strong>배민·쿠팡이츠 계산법</strong>: 중개수수료는 <code>(음식값 + 고객배달팁)</code>에 부과됩니다.
+        기본값은 배민 <strong>7.8% / 3,400원</strong>, 쿠팡이츠 <strong>9.8% / 2,900원</strong>으로 최대치 적용됐으며,
+        매출 하위 구간이면 <em>요금제 선택</em>으로 변경하세요.
+      </div>
+      <div id="platformList"></div>
+      <div class="toolbar">
+        <button class="btn btn-ghost" onclick="addPlatform('baemin','baemin_top')">+ 배민 추가</button>
+        <button class="btn btn-ghost" onclick="addPlatform('coupang','coupang_smart')">+ 쿠팡이츠 추가</button>
+        <button class="btn btn-ghost" onclick="addPlatform('yogiyo','yogiyo_lite')">+ 요기요 추가</button>
+        <button class="btn btn-ghost" onclick="addPlatform('etc','etc_custom')">+ 기타 (홀/포장 등)</button>
+      </div>
+    </section>
+
+    <!-- 고정비 -->
+    <section class="section">
+      <h2>
+        🧾 월 고정비
+        <span class="tag">항목 자유 추가</span>
+      </h2>
+      <div id="fixedCostList"></div>
+      <div class="toolbar">
+        <button class="btn btn-ghost" onclick="addFixedCost()">+ 항목 추가</button>
+      </div>
+    </section>
+
+    <!-- 결산 -->
+    <section class="section">
+      <h2>
+        💰 월 결산
+        <span class="tag" id="lastUpdated">실시간 계산</span>
+      </h2>
+
+      <div class="profit-big" id="profitBig">
+        <div class="big-label">월 순이익 (영업이익)</div>
+        <div class="big-value" id="netProfit">₩0</div>
+        <div class="big-sub" id="netProfitSub">이익률 0%</div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="stat">
+          <div class="stat-label">총 매출 (고객결제 기준)</div>
+          <div class="stat-value" id="totalRevenue">₩0</div>
+          <div class="stat-sub" id="totalOrders">0건</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">실입금액 (수수료·배달비 차감 후)</div>
+          <div class="stat-value accent" id="netSettlement">₩0</div>
+          <div class="stat-sub" id="avgPerOrder">건당 ₩0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">수수료·배달비 총합</div>
+          <div class="stat-value bad" id="totalFees">₩0</div>
+          <div class="stat-sub" id="feeRate">매출 대비 0%</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">광고비 총합</div>
+          <div class="stat-value bad" id="totalAds">₩0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">식자재비</div>
+          <div class="stat-value bad" id="totalCogs">₩0</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">고정비 합계</div>
+          <div class="stat-value bad" id="totalFixed">₩0</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:0.95rem;color:var(--muted);margin:16px 0 4px;">플랫폼별 상세</h3>
+      <div style="overflow-x:auto;">
+        <table id="breakdownTable">
+          <thead>
+            <tr>
+              <th>플랫폼</th>
+              <th>매출</th>
+              <th>중개수수료</th>
+              <th>결제수수료</th>
+              <th>업주배달비</th>
+              <th>광고비</th>
+              <th>실입금</th>
+            </tr>
+          </thead>
+          <tbody id="breakdownBody"></tbody>
+        </table>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="saveState()">💾 저장</button>
+        <button class="btn btn-ghost" onclick="loadState()">📂 불러오기</button>
+        <button class="btn btn-ghost" onclick="resetAll()">🔄 초기화</button>
+      </div>
+    </section>
+
+    <div style="text-align:center;color:var(--muted);font-size:0.75rem;padding:20px 0;">
+      ⚠️ 본 계산기는 참고용입니다. 실제 정산금액은 플랫폼별 공식 정산내역서를 확인하세요.
+    </div>
+  </div>
+
+  <script>
+    // ===== 플랫폼 요금제 프리셋 =====
+    // VAT: 수수료율/배달비에 10% 부가세 별도 적용이 일반적
+    // feeBase: 'order' = 음식값만 / 'total' = 음식값+고객배달팁 (배민/쿠팡이츠는 total)
+    const PRESETS = {
+      // ===== 배민 =====
+      baemin_top: {
+        platform: 'baemin', label: '배민 상생요금제 (상위 35%)',
+        commissionRate: 7.8, payRate: 3.0, deliveryFee: 3400,
+        feeBase: 'total', vatIncluded: false,
+      },
+      baemin_mid1: {
+        platform: 'baemin', label: '배민 상생요금제 (35~50%)',
+        commissionRate: 6.8, payRate: 3.0, deliveryFee: 3100,
+        feeBase: 'total', vatIncluded: false,
+      },
+      baemin_mid2: {
+        platform: 'baemin', label: '배민 상생요금제 (50~80%)',
+        commissionRate: 6.8, payRate: 3.0, deliveryFee: 2900,
+        feeBase: 'total', vatIncluded: false,
+      },
+      baemin_low: {
+        platform: 'baemin', label: '배민 상생요금제 (하위 20%)',
+        commissionRate: 2.0, payRate: 3.0, deliveryFee: 2900,
+        feeBase: 'total', vatIncluded: false,
+      },
+      baemin_open: {
+        platform: 'baemin', label: '배민 가게배달 (오픈리스트 6.8%)',
+        commissionRate: 6.8, payRate: 3.0, deliveryFee: 0,
+        feeBase: 'order', vatIncluded: false,
+        note: '자체배달/배달대행 별도',
+      },
+      // ===== 쿠팡이츠 =====
+      coupang_smart: {
+        platform: 'coupang', label: '쿠팡이츠 스마트 (9.8% / 2,900원)',
+        commissionRate: 9.8, payRate: 3.0, deliveryFee: 2900,
+        feeBase: 'total', vatIncluded: false,
+      },
+      coupang_top: {
+        platform: 'coupang', label: '쿠팡이츠 상생 (상위 35%)',
+        commissionRate: 7.8, payRate: 3.0, deliveryFee: 3400,
+        feeBase: 'total', vatIncluded: false,
+      },
+      coupang_mid: {
+        platform: 'coupang', label: '쿠팡이츠 상생 (35~80%)',
+        commissionRate: 6.8, payRate: 3.0, deliveryFee: 2900,
+        feeBase: 'total', vatIncluded: false,
+      },
+      coupang_low: {
+        platform: 'coupang', label: '쿠팡이츠 상생 (하위 20%)',
+        commissionRate: 2.0, payRate: 3.0, deliveryFee: 2900,
+        feeBase: 'total', vatIncluded: false,
+      },
+      coupang_save: {
+        platform: 'coupang', label: '쿠팡이츠 절약형 (5.5%)',
+        commissionRate: 5.5, payRate: 3.0, deliveryFee: 3400,
+        feeBase: 'total', vatIncluded: false,
+      },
+      // ===== 요기요 =====
+      yogiyo_lite: {
+        platform: 'yogiyo', label: '요기요 라이트 (가게배달 9.7%)',
+        commissionRate: 9.7, payRate: 3.0, deliveryFee: 0,
+        feeBase: 'order', vatIncluded: false,
+        note: '자체배달/배달대행 별도',
+      },
+      yogiyo_express: {
+        platform: 'yogiyo', label: '요기배달 (9.7% + 건당 2,900원)',
+        commissionRate: 9.7, payRate: 3.0, deliveryFee: 2900,
+        feeBase: 'order', vatIncluded: false,
+      },
+      yogiyo_basic: {
+        platform: 'yogiyo', label: '요기요 기본 (12.5%)',
+        commissionRate: 12.5, payRate: 3.0, deliveryFee: 0,
+        feeBase: 'order', vatIncluded: false,
+      },
+      // ===== 기타 =====
+      etc_custom: {
+        platform: 'etc', label: '기타 (직접입력)',
+        commissionRate: 0, payRate: 0, deliveryFee: 0,
+        feeBase: 'order', vatIncluded: true,
+      },
+    };
+
+    const PLATFORM_LABEL = {
+      baemin: '배민', coupang: '쿠팡이츠', yogiyo: '요기요', etc: '기타',
+    };
+
+    // ===== 상태 =====
+    let state = {
+      storeName: '',
+      cogsRate: 35,
+      platforms: [],
+      fixedCosts: [],
+    };
+
+    let nextId = 1;
+
+    // ===== 유틸 =====
+    const krw = (n) => {
+      const rounded = Math.round(n);
+      return '₩' + rounded.toLocaleString('ko-KR');
+    };
+    const pct = (n) => (isFinite(n) ? n.toFixed(1) : '0.0') + '%';
+
+    function getPlatformOptions(platformType) {
+      return Object.entries(PRESETS)
+        .filter(([k, v]) => v.platform === platformType)
+        .map(([k, v]) => ({ key: k, label: v.label }));
+    }
+
+    // ===== 플랫폼 카드 =====
+    function addPlatform(platformType, presetKey) {
+      const preset = PRESETS[presetKey];
+      const p = {
+        id: nextId++,
+        presetKey,
+        platform: platformType,
+        orders: 0,
+        avgOrder: 20000,
+        avgTip: platformType === 'yogiyo' ? 0 : 3000,
+        commissionRate: preset.commissionRate,
+        payRate: preset.payRate,
+        deliveryFee: preset.deliveryFee,
+        feeBase: preset.feeBase,
+        vatIncluded: preset.vatIncluded,
+        adCost: 0,
+      };
+      state.platforms.push(p);
+      renderPlatforms();
+      calculate();
+    }
+
+    function removePlatform(id) {
+      state.platforms = state.platforms.filter(p => p.id !== id);
+      renderPlatforms();
+      calculate();
+    }
+
+    function updatePlatform(id, field, value) {
+      const p = state.platforms.find(p => p.id === id);
+      if (!p) return;
+      if (field === 'presetKey') {
+        const preset = PRESETS[value];
+        p.presetKey = value;
+        p.commissionRate = preset.commissionRate;
+        p.payRate = preset.payRate;
+        p.deliveryFee = preset.deliveryFee;
+        p.feeBase = preset.feeBase;
+        p.vatIncluded = preset.vatIncluded;
+        renderPlatforms();
+      } else {
+        p[field] = value;
+      }
+      calculate();
+    }
+
+    function renderPlatforms() {
+      const container = document.getElementById('platformList');
+      container.innerHTML = '';
+      state.platforms.forEach(p => {
+        const options = getPlatformOptions(p.platform);
+        const optsHTML = options.map(o =>
+          `<option value="${o.key}" ${o.key === p.presetKey ? 'selected' : ''}>${o.label}</option>`
+        ).join('');
+
+        const showTip = p.feeBase === 'total';
+
+        const card = document.createElement('div');
+        card.className = 'platform-card';
+        card.dataset.platform = p.platform;
+        card.innerHTML = `
+          <div class="platform-header">
+            <div class="platform-title">${PLATFORM_LABEL[p.platform]}</div>
+            <button class="btn btn-danger" onclick="removePlatform(${p.id})">삭제</button>
+          </div>
+          <div class="grid grid-2" style="margin-bottom:10px;">
+            <div style="grid-column:1/-1;">
+              <label>요금제</label>
+              <select onchange="updatePlatform(${p.id},'presetKey',this.value)">${optsHTML}</select>
+            </div>
+            <div>
+              <label>월 주문건수</label>
+              <input type="number" min="0" value="${p.orders}"
+                oninput="updatePlatform(${p.id},'orders',+this.value||0)">
+            </div>
+            <div>
+              <label>평균 음식값 (₩/건)</label>
+              <input type="number" min="0" value="${p.avgOrder}"
+                oninput="updatePlatform(${p.id},'avgOrder',+this.value||0)">
+            </div>
+            ${showTip ? `
+            <div style="grid-column:1/-1;">
+              <label>평균 고객부담 배달팁 (₩/건) <span style="color:var(--accent);">※ 수수료 계산에 포함</span></label>
+              <input type="number" min="0" value="${p.avgTip}"
+                oninput="updatePlatform(${p.id},'avgTip',+this.value||0)">
+            </div>` : ''}
+            <div style="grid-column:1/-1;">
+              <label>월 광고비 (₩)</label>
+              <input type="number" min="0" value="${p.adCost}"
+                oninput="updatePlatform(${p.id},'adCost',+this.value||0)">
+            </div>
+          </div>
+          <details class="advanced">
+            <summary>🔧 수수료 상세 조정</summary>
+            <div class="grid grid-3">
+              <div>
+                <label>중개수수료 (%)</label>
+                <input type="number" step="0.1" min="0" value="${p.commissionRate}"
+                  oninput="updatePlatform(${p.id},'commissionRate',+this.value||0)">
+              </div>
+              <div>
+                <label>결제수수료 (%)</label>
+                <input type="number" step="0.1" min="0" value="${p.payRate}"
+                  oninput="updatePlatform(${p.id},'payRate',+this.value||0)">
+              </div>
+              <div>
+                <label>업주부담 배달비 (₩/건)</label>
+                <input type="number" min="0" value="${p.deliveryFee}"
+                  oninput="updatePlatform(${p.id},'deliveryFee',+this.value||0)">
+              </div>
+            </div>
+            <div class="grid grid-2" style="margin-top:10px;">
+              <div>
+                <label>수수료 부과 기준</label>
+                <select onchange="updatePlatform(${p.id},'feeBase',this.value)">
+                  <option value="order" ${p.feeBase==='order'?'selected':''}>음식값만</option>
+                  <option value="total" ${p.feeBase==='total'?'selected':''}>음식값 + 고객배달팁</option>
+                </select>
+              </div>
+              <div>
+                <label>VAT 처리</label>
+                <select onchange="updatePlatform(${p.id},'vatIncluded',this.value==='true')">
+                  <option value="false" ${!p.vatIncluded?'selected':''}>별도 (+10%)</option>
+                  <option value="true" ${p.vatIncluded?'selected':''}>이미 포함</option>
+                </select>
+              </div>
+            </div>
+          </details>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // ===== 고정비 =====
+    function addFixedCost(name = '', amount = 0) {
+      state.fixedCosts.push({ id: nextId++, name, amount });
+      renderFixedCosts();
+      calculate();
+    }
+
+    function removeFixedCost(id) {
+      state.fixedCosts = state.fixedCosts.filter(c => c.id !== id);
+      renderFixedCosts();
+      calculate();
+    }
+
+    function updateFixedCost(id, field, value) {
+      const c = state.fixedCosts.find(c => c.id === id);
+      if (!c) return;
+      c[field] = value;
+      calculate();
+    }
+
+    function renderFixedCosts() {
+      const container = document.getElementById('fixedCostList');
+      container.innerHTML = '';
+      if (state.fixedCosts.length === 0) {
+        container.innerHTML = '<div style="color:var(--muted);font-size:0.85rem;padding:6px 0;">항목을 추가하세요 (예: 월세, 인건비, 공과금, 보험, 통신비, POS 사용료 등)</div>';
+        return;
+      }
+      state.fixedCosts.forEach(c => {
+        const row = document.createElement('div');
+        row.className = 'cost-row';
+        row.innerHTML = `
+          <input type="text" placeholder="항목명 (예: 월세)" value="${c.name.replace(/"/g,'&quot;')}"
+            oninput="updateFixedCost(${c.id},'name',this.value)">
+          <input type="number" min="0" placeholder="0" value="${c.amount}"
+            oninput="updateFixedCost(${c.id},'amount',+this.value||0)">
+          <button class="btn btn-danger" onclick="removeFixedCost(${c.id})">×</button>
+        `;
+        container.appendChild(row);
+      });
+    }
+
+    // ===== 계산 엔진 =====
+    function calcPlatform(p) {
+      const orders = p.orders || 0;
+      const avgOrder = p.avgOrder || 0;
+      const avgTip = p.feeBase === 'total' ? (p.avgTip || 0) : 0;
+
+      const revenue = orders * (avgOrder + avgTip); // 고객결제 매출
+      const foodRevenue = orders * avgOrder;        // 음식값 매출
+      const feeBaseAmount = p.feeBase === 'total' ? revenue : foodRevenue;
+
+      const vatMul = p.vatIncluded ? 1 : 1.1;
+
+      const commission = feeBaseAmount * (p.commissionRate / 100) * vatMul;
+      const payFee = feeBaseAmount * (p.payRate / 100) * vatMul;
+      const delivery = orders * (p.deliveryFee || 0) * vatMul;
+      const adCost = p.adCost || 0;
+
+      const totalFees = commission + payFee + delivery;
+      const netSettlement = revenue - totalFees; // 실입금액 (광고비 제외)
+      const afterAd = netSettlement - adCost;
+
+      return {
+        orders, revenue, foodRevenue,
+        commission, payFee, delivery, adCost,
+        totalFees, netSettlement, afterAd,
+      };
+    }
+
+    function calculate() {
+      const results = state.platforms.map(p => ({ p, r: calcPlatform(p) }));
+
+      let totalRevenue = 0, totalOrders = 0;
+      let totalCommission = 0, totalPayFee = 0, totalDelivery = 0, totalAd = 0;
+      let totalSettlement = 0;
+
+      results.forEach(({ r }) => {
+        totalRevenue += r.revenue;
+        totalOrders += r.orders;
+        totalCommission += r.commission;
+        totalPayFee += r.payFee;
+        totalDelivery += r.delivery;
+        totalAd += r.adCost;
+        totalSettlement += r.netSettlement;
+      });
+
+      const totalFees = totalCommission + totalPayFee + totalDelivery;
+      const cogs = totalRevenue * ((state.cogsRate || 0) / 100);
+      const fixedTotal = state.fixedCosts.reduce((s, c) => s + (+c.amount || 0), 0);
+
+      const netProfit = totalSettlement - totalAd - cogs - fixedTotal;
+      const margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+      const avgPerOrder = totalOrders > 0 ? totalSettlement / totalOrders : 0;
+      const feeRate = totalRevenue > 0 ? (totalFees / totalRevenue) * 100 : 0;
+
+      // 요약 DOM
+      document.getElementById('totalRevenue').textContent = krw(totalRevenue);
+      document.getElementById('totalOrders').textContent = totalOrders.toLocaleString() + '건';
+      document.getElementById('netSettlement').textContent = krw(totalSettlement);
+      document.getElementById('avgPerOrder').textContent = '건당 ' + krw(avgPerOrder);
+      document.getElementById('totalFees').textContent = krw(totalFees);
+      document.getElementById('feeRate').textContent = '매출 대비 ' + pct(feeRate);
+      document.getElementById('totalAds').textContent = krw(totalAd);
+      document.getElementById('totalCogs').textContent = krw(cogs);
+      document.getElementById('totalFixed').textContent = krw(fixedTotal);
+
+      const profitBig = document.getElementById('profitBig');
+      document.getElementById('netProfit').textContent = krw(netProfit);
+      document.getElementById('netProfitSub').textContent = '이익률 ' + pct(margin);
+      profitBig.classList.toggle('loss', netProfit < 0);
+
+      // 플랫폼별 테이블
+      const tbody = document.getElementById('breakdownBody');
+      tbody.innerHTML = '';
+      results.forEach(({ p, r }) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${PLATFORM_LABEL[p.platform]} (${r.orders}건)</td>
+          <td>${krw(r.revenue)}</td>
+          <td>${krw(r.commission)}</td>
+          <td>${krw(r.payFee)}</td>
+          <td>${krw(r.delivery)}</td>
+          <td>${krw(r.adCost)}</td>
+          <td>${krw(r.netSettlement - r.adCost)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      if (results.length > 1) {
+        const tr = document.createElement('tr');
+        tr.className = 'total';
+        tr.innerHTML = `
+          <td>합계</td>
+          <td>${krw(totalRevenue)}</td>
+          <td>${krw(totalCommission)}</td>
+          <td>${krw(totalPayFee)}</td>
+          <td>${krw(totalDelivery)}</td>
+          <td>${krw(totalAd)}</td>
+          <td>${krw(totalSettlement - totalAd)}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    // ===== 저장/불러오기 =====
+    const STORAGE_KEY = 'burgerpark.profit-calc.v1';
+
+    function collectState() {
+      state.storeName = document.getElementById('storeName').value;
+      state.cogsRate = +document.getElementById('cogsRate').value || 0;
+      return state;
+    }
+
+    function saveState() {
+      collectState();
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      alert('💾 저장되었습니다');
+    }
+
+    function loadState() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { alert('저장된 데이터가 없습니다'); return; }
+      try {
+        const loaded = JSON.parse(raw);
+        state = {
+          storeName: loaded.storeName || '',
+          cogsRate: loaded.cogsRate ?? 35,
+          platforms: (loaded.platforms || []).map(p => ({ ...p, id: nextId++ })),
+          fixedCosts: (loaded.fixedCosts || []).map(c => ({ ...c, id: nextId++ })),
+        };
+        document.getElementById('storeName').value = state.storeName;
+        document.getElementById('cogsRate').value = state.cogsRate;
+        renderPlatforms();
+        renderFixedCosts();
+        calculate();
+      } catch (e) {
+        alert('데이터 불러오기 실패');
+      }
+    }
+
+    function resetAll() {
+      if (!confirm('모든 입력을 초기화할까요?')) return;
+      state = { storeName: '', cogsRate: 35, platforms: [], fixedCosts: [] };
+      document.getElementById('storeName').value = '';
+      document.getElementById('cogsRate').value = 35;
+      renderPlatforms();
+      renderFixedCosts();
+      calculate();
+    }
+
+    // ===== 초기화 =====
+    document.getElementById('cogsRate').addEventListener('input', () => {
+      state.cogsRate = +document.getElementById('cogsRate').value || 0;
+      calculate();
+    });
+    document.getElementById('storeName').addEventListener('input', () => {
+      state.storeName = document.getElementById('storeName').value;
+    });
+
+    // 자동 불러오기 시도, 없으면 기본 샘플
+    (function init() {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        loadState();
+      } else {
+        // 기본 샘플: 배민 1개, 쿠팡이츠 1개, 고정비 3개
+        addPlatform('baemin', 'baemin_top');
+        addPlatform('coupang', 'coupang_smart');
+        addFixedCost('월세', 2000000);
+        addFixedCost('인건비', 4000000);
+        addFixedCost('공과금 (전기/가스/수도)', 500000);
+      }
+    })();
+  </script>
+</body>
+</html>
