@@ -1,0 +1,10 @@
+# Raw thermal videos + intermediate samples + analysis outputs.
+# The videos themselves are stored as GitHub Release assets, not in git history.
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
