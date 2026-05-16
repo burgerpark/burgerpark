@@ -37,11 +37,16 @@ GRILL_HOT_PIXEL_FRAC = 0.15
 ROI_RADIUS_SCALE = 0.95              # multiplier on median detected radius
 
 FLIP_NORM = 0.27                     # mean surface norm trigger
-COOK1_MIN_S = 30.0
+COOK1_MIN_S = 50.0                   # video 1 reference: flip @ 61s, lock ≈ 11s
 FLIP_AUTO_AFTER_S = 8.0
 DONE_NORM = 0.30
 DONE_HOLD_S = 6.0
 COOK2_MIN_S = 25.0
+
+# Spatial gate for detection candidates (in downsampled frame coords as fractions).
+# Lets us reject components that lie at the very edge / top of the frame which
+# are usually the table or grill housing, not patties.
+DETECT_GATE = {"x_min": 0.05, "x_max": 0.85, "y_min": 0.30, "y_max": 0.95}
 
 STATE_COLORS = {
     "COOKING":        (250, 200,  80),
