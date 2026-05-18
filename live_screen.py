@@ -8,17 +8,30 @@ Unlike TopView (which only supports 3 measurement dots), this script
 detects an arbitrary number of patties per frame, assigns each one a
 stable ID, and tracks its mean surface temperature and elapsed time.
 
+Two capture modes:
+  --visible     (default) cheap GDI screen grab via mss; fast but the
+                TopView window must be unobstructed and on-screen.
+  --background  PrintWindow API; works even when TopView is covered by
+                other windows or sits on a different virtual desktop.
+                Requires pywin32. Some GPU-accelerated apps render as
+                solid black under this method; if so, fall back to
+                --visible.
+
 Run on the Windows PC (TopView open + showing the live feed):
-    pip install mss pygetwindow opencv-python numpy
-    python live_screen.py
+    pip install mss pygetwindow opencv-python numpy pywin32
+    python live_screen.py                     # foreground
+    python live_screen.py --background        # capture-when-hidden
 
 Keys in the live window:
     q : quit
     r : re-detect the colour bar (use after resizing TopView)
+    b : draw the camera-image ROI by hand (mouse drag, ENTER to accept)
     s : save the current ROI to ./data/probe/
 """
 from __future__ import annotations
 
+import argparse
+import ctypes
 import sys
 import time
 from dataclasses import dataclass, field
@@ -62,11 +75,72 @@ def find_window():
     return None
 
 
-def capture(sct, win):
+def capture_visible(sct, win):
+    """GDI screen grab — fast but only works if the window is on top / visible."""
     bbox = {"left": int(win.left), "top": int(win.top),
             "width": int(win.width), "height": int(win.height)}
     raw = np.array(sct.grab(bbox))
     return cv2.cvtColor(raw, cv2.COLOR_BGRA2BGR)
+
+
+# lazily imported so non-Windows / no-pywin32 setups still load the file
+_win32gui = None
+_win32ui = None
+
+
+def _ensure_win32():
+    global _win32gui, _win32ui
+    if _win32gui is None:
+        import win32gui as _g, win32ui as _u   # type: ignore
+        _win32gui, _win32ui = _g, _u
+    return _win32gui, _win32ui
+
+
+def capture_background(hwnd):
+    """PrintWindow capture — works even when the window is hidden behind others.
+
+    Uses PW_RENDERFULLCONTENT (flag 0x2) so Chromium/DirectComposition-style
+    apps render their actual contents instead of a black rect.
+    """
+    win32gui, win32ui = _ensure_win32()
+    l, t, r, b = win32gui.GetWindowRect(hwnd)
+    w, h = r - l, b - t
+    if w <= 0 or h <= 0:
+        raise RuntimeError("window has zero size (minimised?)")
+
+    hdc_window = win32gui.GetWindowDC(hwnd)
+    mfc_dc = win32ui.CreateDCFromHandle(hdc_window)
+    save_dc = mfc_dc.CreateCompatibleDC()
+    bmp = win32ui.CreateBitmap()
+    bmp.CreateCompatibleBitmap(mfc_dc, w, h)
+    save_dc.SelectObject(bmp)
+
+    ok = ctypes.windll.user32.PrintWindow(hwnd, save_dc.GetSafeHdc(), 0x2)
+    info = bmp.GetInfo()
+    bits = bmp.GetBitmapBits(True)
+    img = np.frombuffer(bits, dtype=np.uint8).reshape(info["bmHeight"], info["bmWidth"], 4)
+    img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR).copy()  # detach from C buffer
+
+    # cleanup
+    win32gui.DeleteObject(bmp.GetHandle())
+    save_dc.DeleteDC()
+    mfc_dc.DeleteDC()
+    win32gui.ReleaseDC(hwnd, hdc_window)
+
+    if not ok:
+        raise RuntimeError("PrintWindow returned 0 (unsupported window?)")
+    return img
+
+
+def pick_roi_with_mouse(frame, title="drag camera region — ENTER to accept, ESC to cancel"):
+    """Let the user drag a rectangle on the current capture.
+    Returns (x0, x1, y0, y1) or None if cancelled."""
+    r = cv2.selectROI(title, frame, fromCenter=False, showCrosshair=True)
+    cv2.destroyWindow(title)
+    x, y, w, h = [int(v) for v in r]
+    if w <= 4 or h <= 4:
+        return None
+    return x, x + w, y, y + h
 
 
 def find_colorbar(frame_bgr):
@@ -265,6 +339,11 @@ def colour_for_id(tid: int) -> tuple[int, int, int]:
 
 
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--background", action="store_true",
+                    help="capture via PrintWindow API (works while hidden)")
+    args = ap.parse_args()
+
     print(f"looking for window containing '{WINDOW_TITLE_SUBSTRING}' ...")
     win = find_window()
     if win is None:
@@ -273,13 +352,27 @@ def main():
         return 1
     print(f"✅ {win.title}  pos=({win.left},{win.top})  size={win.width}x{win.height}")
 
+    hwnd = None
+    if args.background:
+        try:
+            _ensure_win32()
+            hwnd = win._hWnd  # pygetwindow keeps the HWND here on Windows
+            print("capture mode: BACKGROUND (PrintWindow)  — works when hidden")
+        except ImportError:
+            print("❌ pywin32 not installed; falling back to visible mode")
+            print("   install with: pip install pywin32")
+            args.background = False
+    if not args.background:
+        print("capture mode: VISIBLE (mss)  — TopView must be on-screen")
+
     sct = mss.mss()
     cb = None
     qlut = None
     roi = None
+    manual_roi = False
     tracker = PattyTracker()
 
-    print("\nstarting capture. q=quit, r=re-detect colour bar, s=save frame")
+    print("\nkeys: q=quit  r=redetect colour bar  b=draw camera ROI  s=save frame")
     out_win = "burgerpark — live (via TopView capture)"
     cv2.namedWindow(out_win, cv2.WINDOW_NORMAL)
 
@@ -289,7 +382,10 @@ def main():
 
     while True:
         try:
-            frame = capture(sct, win)
+            if args.background:
+                frame = capture_background(hwnd)
+            else:
+                frame = capture_visible(sct, win)
         except Exception as e:
             print(f"capture error: {e}")
             time.sleep(0.5)
@@ -306,8 +402,10 @@ def main():
                 continue
             print(f"colour bar: x={cb.x0}-{cb.x1}  y={cb.y0}-{cb.y1}  L={len(cb.lut_norm)}")
             qlut = build_qlut(cb)
-            roi = detect_camera_roi(frame, cb)
-            print(f"camera ROI: x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
+            if not manual_roi:
+                roi = detect_camera_roi(frame, cb)
+                print(f"camera ROI (auto): x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
+                print("press 'b' if you want to draw the ROI by hand instead")
 
         x0, x1, y0, y1 = roi
         sub = frame[y0:y1, x0:x1]
@@ -361,6 +459,15 @@ def main():
         if k == ord("r"):
             cb = None
             print("re-detecting colour bar...")
+        if k == ord("b"):
+            new_roi = pick_roi_with_mouse(frame)
+            if new_roi is not None:
+                roi = new_roi
+                manual_roi = True
+                tracker = PattyTracker()       # ids are stale after ROI change
+                print(f"camera ROI (manual): x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
+            else:
+                print("ROI selection cancelled")
         if k == ord("s"):
             saved += 1
             p = OUT / f"live_{int(time.time())}_{saved:02d}.png"
