@@ -1,8 +1,12 @@
-"""Live analysis via TopView window capture.
+"""Live analysis via TopView window capture, with multi-patty tracking.
 
 TC001 Max isn't a standard UVC camera so OpenCV can't open it directly.
 Instead we let TopView own the camera, capture its window, and run our
 colour-bar LUT pipeline on the captured pixels.
+
+Unlike TopView (which only supports 3 measurement dots), this script
+detects an arbitrary number of patties per frame, assigns each one a
+stable ID, and tracks its mean surface temperature and elapsed time.
 
 Run on the Windows PC (TopView open + showing the live feed):
     pip install mss pygetwindow opencv-python numpy
@@ -17,7 +21,7 @@ from __future__ import annotations
 
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import cv2
@@ -36,6 +40,9 @@ WINDOW_TITLE_SUBSTRING = "TopView"
 LUT_BITS = 5
 OUT = Path(__file__).resolve().parent / "data" / "probe"
 OUT.mkdir(parents=True, exist_ok=True)
+
+TRACK_MAX_DIST_PX = 60        # centroid match radius between frames
+TRACK_MAX_MISSED = 6          # keep a track alive this many frames after last seen
 
 
 @dataclass
@@ -122,28 +129,139 @@ def detect_camera_roi(frame_bgr, cb):
     return x0, x1, y0, y1
 
 
-def segment_patties(norm_t, hot_q=0.55, cold_q=0.45, min_area_frac=0.003):
+@dataclass
+class Detection:
+    """One patty-like blob found in a single frame."""
+    cx: float
+    cy: float
+    area: int
+    mean_t: float            # normalised temperature 0..1
+    mask: np.ndarray         # boolean mask, same shape as the ROI
+
+
+def find_patty_blobs(norm_t, hot_q=0.55, cold_q=0.45,
+                     min_area_frac=0.003) -> list[Detection]:
+    """Return a list of detections, one per patty-like cool blob."""
     H, W = norm_t.shape
     min_area = max(int(H * W * min_area_frac), 200)
     hot = norm_t > hot_q
     if hot.mean() < 0.05:
-        return np.zeros_like(norm_t, dtype=bool)
+        return []
 
     cool = (norm_t < cold_q).astype(np.uint8) * 255
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     cool = cv2.morphologyEx(cool, cv2.MORPH_OPEN, k)
     cool = cv2.morphologyEx(cool, cv2.MORPH_CLOSE, k)
 
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(cool, connectivity=8)
-    keep = np.zeros_like(cool, dtype=bool)
+    n, labels, stats, centroids = cv2.connectedComponentsWithStats(cool, connectivity=8)
+    out: list[Detection] = []
     for i in range(1, n):
         x, y, w, h, area = stats[i]
         if area < min_area:
             continue
         if x <= 2 or y <= 2 or x + w >= W - 2 or y + h >= H - 2:
             continue
-        keep |= (labels == i)
-    return keep
+        m = (labels == i)
+        out.append(Detection(
+            cx=float(centroids[i][0]),
+            cy=float(centroids[i][1]),
+            area=int(area),
+            mean_t=float(norm_t[m].mean()),
+            mask=m,
+        ))
+    return out
+
+
+@dataclass
+class Track:
+    """A patty followed across frames."""
+    id: int
+    cx: float
+    cy: float
+    area: int
+    mean_t: float
+    first_seen: float        # wall-clock seconds
+    last_seen: float
+    missed: int = 0
+    mean_t_history: list[float] = field(default_factory=list)
+
+
+class PattyTracker:
+    """Greedy nearest-centroid tracker; good enough for ~12 mostly-static patties."""
+
+    def __init__(self):
+        self.next_id = 1
+        self.tracks: dict[int, Track] = {}
+
+    def update(self, dets: list[Detection], now: float) -> list[Track]:
+        # build distance matrix detections × existing tracks
+        if self.tracks and dets:
+            ids = list(self.tracks.keys())
+            tx = np.array([self.tracks[i].cx for i in ids])
+            ty = np.array([self.tracks[i].cy for i in ids])
+            dx = np.array([d.cx for d in dets])
+            dy = np.array([d.cy for d in dets])
+            dist = np.sqrt((dx[:, None] - tx[None, :]) ** 2
+                           + (dy[:, None] - ty[None, :]) ** 2)
+            matched_det: set[int] = set()
+            matched_trk: set[int] = set()
+            # greedy: repeatedly take the smallest pair under threshold
+            while True:
+                if dist.size == 0:
+                    break
+                idx = np.argmin(dist)
+                di, ti = divmod(int(idx), dist.shape[1])
+                if dist[di, ti] > TRACK_MAX_DIST_PX:
+                    break
+                tid = ids[ti]
+                d = dets[di]
+                tr = self.tracks[tid]
+                tr.cx, tr.cy = d.cx, d.cy
+                tr.area = d.area
+                tr.mean_t = d.mean_t
+                tr.last_seen = now
+                tr.missed = 0
+                tr.mean_t_history.append(d.mean_t)
+                if len(tr.mean_t_history) > 600:
+                    tr.mean_t_history.pop(0)
+                matched_det.add(di)
+                matched_trk.add(ti)
+                dist[di, :] = np.inf
+                dist[:, ti] = np.inf
+            unmatched_dets = [i for i in range(len(dets)) if i not in matched_det]
+            unmatched_trks = [ids[i] for i in range(len(ids)) if i not in matched_trk]
+        else:
+            unmatched_dets = list(range(len(dets)))
+            unmatched_trks = list(self.tracks.keys())
+
+        # new tracks for unmatched detections
+        for di in unmatched_dets:
+            d = dets[di]
+            tid = self.next_id
+            self.next_id += 1
+            self.tracks[tid] = Track(
+                id=tid, cx=d.cx, cy=d.cy, area=d.area,
+                mean_t=d.mean_t, first_seen=now, last_seen=now,
+                mean_t_history=[d.mean_t],
+            )
+
+        # age out unmatched tracks
+        for tid in unmatched_trks:
+            self.tracks[tid].missed += 1
+        to_drop = [tid for tid, tr in self.tracks.items()
+                   if tr.missed > TRACK_MAX_MISSED]
+        for tid in to_drop:
+            del self.tracks[tid]
+
+        return list(self.tracks.values())
+
+
+def colour_for_id(tid: int) -> tuple[int, int, int]:
+    """Stable BGR colour for a given track id (golden-ratio hue spacing)."""
+    h = int((tid * 47) % 180)
+    hsv = np.uint8([[[h, 200, 240]]])
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0, 0]
+    return int(bgr[0]), int(bgr[1]), int(bgr[2])
 
 
 def main():
@@ -159,6 +277,7 @@ def main():
     cb = None
     qlut = None
     roi = None
+    tracker = PattyTracker()
 
     print("\nstarting capture. q=quit, r=re-detect colour bar, s=save frame")
     out_win = "burgerpark — live (via TopView capture)"
@@ -196,28 +315,42 @@ def main():
             cb = None
             continue
         norm = lut_apply(sub, qlut)
-        mask = segment_patties(norm)
+        dets = find_patty_blobs(norm)
+
+        now = time.time()
+        tracks = tracker.update(dets, now)
 
         vis = sub.copy()
-        if mask.any():
-            overlay = vis.copy()
-            overlay[mask] = (0, 255, 0)
-            vis = cv2.addWeighted(vis, 0.55, overlay, 0.45, 0)
-            mean_t = float(norm[mask].mean())
-            area = int(mask.sum())
-            label = f"patty mean(norm)={mean_t:.2f}  area={area}px  n={int(mask.sum() > 0)}"
-        else:
-            label = "no patty detected"
+        for tr in tracks:
+            # find the detection for this track this frame, if any, for mask drawing
+            d = next((d for d in dets
+                      if abs(d.cx - tr.cx) < 1 and abs(d.cy - tr.cy) < 1), None)
+            col = colour_for_id(tr.id)
+            if d is not None:
+                overlay = vis.copy()
+                overlay[d.mask] = col
+                vis = cv2.addWeighted(vis, 0.6, overlay, 0.4, 0)
+                # contour for clarity
+                cnts, _ = cv2.findContours(d.mask.astype(np.uint8) * 255,
+                                           cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                cv2.drawContours(vis, cnts, -1, col, 2)
+            elapsed = now - tr.first_seen
+            txt = f"#{tr.id}  t={elapsed:5.1f}s  T={tr.mean_t:.2f}"
+            org = (int(tr.cx) - 50, int(tr.cy) - 8)
+            cv2.rectangle(vis,
+                          (org[0] - 4, org[1] - 16),
+                          (org[0] + 130, org[1] + 4),
+                          (0, 0, 0), -1)
+            cv2.putText(vis, txt, org,
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, col, 1, cv2.LINE_AA)
 
         n_frames += 1
-        now = time.time()
         fps = n_frames / (now - last_fps_t + 1e-6) if now - last_fps_t > 0.1 else 0
+        n_active = sum(1 for t in tracks if t.missed == 0)
+        header = f"patties: {n_active} active / {len(tracks)} total      {fps:4.1f} fps"
         cv2.rectangle(vis, (0, 0), (vis.shape[1], 32), (0, 0, 0), -1)
-        cv2.putText(vis, label, (8, 22),
+        cv2.putText(vis, header, (8, 22),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
-        cv2.putText(vis, f"{fps:4.1f} fps",
-                    (vis.shape[1] - 90, 22),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 200, 200), 1, cv2.LINE_AA)
         if now - last_fps_t > 2.0:
             last_fps_t, n_frames = now, 0
 
