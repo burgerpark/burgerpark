@@ -145,7 +145,7 @@ def pick_roi_with_mouse(frame, title="drag camera region — ENTER to accept, ES
 
 def find_colorbar(frame_bgr):
     H, W, _ = frame_bgr.shape
-    rx0 = int(W * 0.75)
+    rx0 = int(W * 0.65)                              # search wider right strip
     search = frame_bgr[:, rx0:W]
     sat = cv2.cvtColor(search, cv2.COLOR_BGR2HSV)[:, :, 1].astype(np.float32)
     score = sat.mean(axis=0) * sat.std(axis=0)
@@ -157,14 +157,33 @@ def find_colorbar(frame_bgr):
     x0, x1 = max(bar_xc - half, 0), min(bar_xc + half, W)
     column = frame_bgr[:, x0:x1].mean(axis=1)
     col_sat = cv2.cvtColor(column.astype(np.uint8)[None, :, :], cv2.COLOR_BGR2HSV)[0, :, 1]
-    ys = np.flatnonzero(col_sat > 40)
-    if ys.size < 50:
+    ys = np.flatnonzero(col_sat > 25)                # lower saturation gate
+    if ys.size < 30:
         return None
     y0, y1 = int(ys[0]), int(ys[-1])
 
     lut_bgr = frame_bgr[y0:y1, x0:x1].mean(axis=1).astype(np.float32)
     lut_norm = np.linspace(1.0, 0.0, lut_bgr.shape[0], dtype=np.float32)
     return ColorBar(x0, x1, y0, y1, lut_bgr, lut_norm)
+
+
+def colorbar_from_rect(frame_bgr, x0, y0, w, h):
+    """Build a ColorBar from a user-drawn rectangle (assumes top=hot, bottom=cold)."""
+    if w < 3 or h < 20:
+        return None
+    x1, y1 = x0 + w, y0 + h
+    lut_bgr = frame_bgr[y0:y1, x0:x1].mean(axis=1).astype(np.float32)
+    lut_norm = np.linspace(1.0, 0.0, lut_bgr.shape[0], dtype=np.float32)
+    return ColorBar(x0, x1, y0, y1, lut_bgr, lut_norm)
+
+
+def pick_colorbar_with_mouse(frame):
+    """Let the user drag a rectangle around the colour bar (top=hot, bottom=cold)."""
+    title = "drag the colour bar (TOP = hottest, BOTTOM = coldest)  —  ENTER ok / ESC cancel"
+    r = cv2.selectROI(title, frame, fromCenter=False, showCrosshair=True)
+    cv2.destroyWindow(title)
+    x, y, w, h = [int(v) for v in r]
+    return colorbar_from_rect(frame, x, y, w, h)
 
 
 def build_qlut(cb, bits=LUT_BITS):
@@ -365,14 +384,14 @@ def main():
     if not args.background:
         print("capture mode: VISIBLE (mss)  — TopView must be on-screen")
 
-    sct = mss.mss()
+    sct = mss.MSS()
     cb = None
     qlut = None
     roi = None
     manual_roi = False
     tracker = PattyTracker()
 
-    print("\nkeys: q=quit  r=redetect colour bar  b=draw camera ROI  s=save frame")
+    print("\nkeys: q=quit  r=redetect bar  c=draw colour bar  b=draw camera ROI  s=save")
     out_win = "burgerpark — live (via TopView capture)"
     cv2.namedWindow(out_win, cv2.WINDOW_NORMAL)
 
@@ -394,13 +413,35 @@ def main():
         if cb is None:
             cb = find_colorbar(frame)
             if cb is None:
-                cv2.putText(frame, "colour bar not detected, retrying...",
-                            (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                cv2.imshow(out_win, frame)
-                if (cv2.waitKey(200) & 0xFF) == ord("q"):
+                hint = frame.copy()
+                cv2.rectangle(hint, (0, 0), (hint.shape[1], 56), (0, 0, 0), -1)
+                cv2.putText(hint,
+                            "colour bar not detected.  c = draw it by hand   q = quit",
+                            (16, 36),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 220, 255), 2, cv2.LINE_AA)
+                cv2.imshow(out_win, hint)
+                k = cv2.waitKey(200) & 0xFF
+                if k == ord("q"):
                     break
+                if k == ord("c"):
+                    cb = pick_colorbar_with_mouse(frame)
+                    if cb is not None:
+                        print(f"colour bar (manual): x={cb.x0}-{cb.x1}  y={cb.y0}-{cb.y1}")
+                        qlut = build_qlut(cb)
+                        if not manual_roi:
+                            roi = detect_camera_roi(frame, cb)
+                            print(f"camera ROI (auto): x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
+                            print("press 'b' to draw the camera ROI by hand")
+                    else:
+                        print("colour bar selection cancelled")
+                if k == ord("b"):
+                    new_roi = pick_roi_with_mouse(frame)
+                    if new_roi is not None:
+                        roi = new_roi
+                        manual_roi = True
+                        print(f"camera ROI (manual): x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
                 continue
-            print(f"colour bar: x={cb.x0}-{cb.x1}  y={cb.y0}-{cb.y1}  L={len(cb.lut_norm)}")
+            print(f"colour bar (auto): x={cb.x0}-{cb.x1}  y={cb.y0}-{cb.y1}  L={len(cb.lut_norm)}")
             qlut = build_qlut(cb)
             if not manual_roi:
                 roi = detect_camera_roi(frame, cb)
@@ -459,6 +500,14 @@ def main():
         if k == ord("r"):
             cb = None
             print("re-detecting colour bar...")
+        if k == ord("c"):
+            new_cb = pick_colorbar_with_mouse(frame)
+            if new_cb is not None:
+                cb = new_cb
+                qlut = build_qlut(cb)
+                print(f"colour bar (manual): x={cb.x0}-{cb.x1}  y={cb.y0}-{cb.y1}")
+            else:
+                print("colour bar selection cancelled")
         if k == ord("b"):
             new_roi = pick_roi_with_mouse(frame)
             if new_roi is not None:
