@@ -36,6 +36,7 @@ import json
 import sys
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 
 import cv2
@@ -58,6 +59,46 @@ CONFIG_PATH = Path(__file__).resolve().parent / "calibration.json"
 
 TRACK_MAX_DIST_PX = 60        # centroid match radius between frames
 TRACK_MAX_MISSED = 6          # keep a track alive this many frames after last seen
+
+
+# --- cooking stage timings (provisional; tune per grill on site) -------------
+# Derived from our two recorded videos:
+#   video 1: operator flipped at 61s   (grill ~220 °C)
+#   video 2: operator flipped at 32s   (grill ~210 °C, pre-heated)
+# USDA safe internal temp for ground beef is 71 °C; top-side surface temp
+# typically lags by 10–15 °C, so we expect the top surface to be ~60 °C
+# when the bottom is well-cooked. We use a time-based state machine and
+# the surface temperature as a sanity gate.
+COOK_PLACING_S        = 5.0    # ignore detection jitter right after placement
+COOK_FLIP_AFTER_S     = 60.0   # side-A cooking time before flip alarm
+COOK_FLIP_WINDOW_S    = 10.0   # how long the FLIP alarm stays before auto-advance
+COOK_BSIDE_S          = 50.0   # side-B cooking time after flip
+COOK_READY_WINDOW_S   = 15.0   # how long READY alarm shows before OVERCOOKED
+PREP_LEAD_S           = 10.0   # warn the operator this many seconds before any event
+
+
+class Stage(Enum):
+    PLACING       = "PLACING"
+    COOKING_A     = "COOKING A"
+    PREP_FLIP     = "PREP FLIP"
+    FLIP_NOW      = "FLIP NOW"
+    COOKING_B     = "COOKING B"
+    PREP_READY    = "PREP READY"
+    READY         = "READY"
+    OVERCOOKED    = "OVERCOOKED"
+
+
+# BGR colours per stage (used for outlines, card backgrounds, etc.)
+STAGE_COLOUR = {
+    Stage.PLACING:    (180, 180, 180),
+    Stage.COOKING_A:  ( 80, 180,  80),
+    Stage.PREP_FLIP:  ( 60, 200, 220),
+    Stage.FLIP_NOW:   ( 30, 130, 255),   # vivid orange (BGR)
+    Stage.COOKING_B:  ( 80, 180,  80),
+    Stage.PREP_READY: (130, 220, 130),
+    Stage.READY:      ( 60, 220,  60),   # bright green
+    Stage.OVERCOOKED: ( 60,  60, 220),   # red
+}
 
 
 def save_calibration(frame_w: int, frame_h: int, cb: "ColorBar",
@@ -318,6 +359,113 @@ class Track:
     last_seen: float
     missed: int = 0
     mean_t_history: list[float] = field(default_factory=list)
+    stage: Stage = Stage.PLACING
+    flipped_at: float | None = None        # wall-clock seconds entering COOKING_B
+    alarm_played: set[Stage] = field(default_factory=set)
+
+
+def advance_stage(tr: Track, now: float) -> Stage | None:
+    """Advance the cooking state machine for one track; return new stage if changed."""
+    prev = tr.stage
+    elapsed = now - tr.first_seen
+    side_a = elapsed                                              # time on side A
+    side_b = (now - tr.flipped_at) if tr.flipped_at else 0.0      # time on side B
+
+    if tr.stage == Stage.PLACING:
+        if elapsed >= COOK_PLACING_S:
+            tr.stage = Stage.COOKING_A
+    elif tr.stage == Stage.COOKING_A:
+        if side_a >= COOK_FLIP_AFTER_S - PREP_LEAD_S:
+            tr.stage = Stage.PREP_FLIP
+    elif tr.stage == Stage.PREP_FLIP:
+        if side_a >= COOK_FLIP_AFTER_S:
+            tr.stage = Stage.FLIP_NOW
+    elif tr.stage == Stage.FLIP_NOW:
+        if side_a >= COOK_FLIP_AFTER_S + COOK_FLIP_WINDOW_S:
+            tr.stage = Stage.COOKING_B
+            tr.flipped_at = now
+    elif tr.stage == Stage.COOKING_B:
+        if side_b >= COOK_BSIDE_S - PREP_LEAD_S:
+            tr.stage = Stage.PREP_READY
+    elif tr.stage == Stage.PREP_READY:
+        if side_b >= COOK_BSIDE_S:
+            tr.stage = Stage.READY
+    elif tr.stage == Stage.READY:
+        if side_b >= COOK_BSIDE_S + COOK_READY_WINDOW_S:
+            tr.stage = Stage.OVERCOOKED
+
+    return tr.stage if tr.stage is not prev else None
+
+
+def next_event_label(tr: Track, now: float) -> str:
+    """Short hint for the panel card: what happens next, in how many seconds."""
+    elapsed = now - tr.first_seen
+    side_b = (now - tr.flipped_at) if tr.flipped_at else 0.0
+    if tr.stage == Stage.PLACING:
+        return f"start in  {max(COOK_PLACING_S - elapsed, 0):4.0f} s"
+    if tr.stage == Stage.COOKING_A:
+        return f"prep flip {max(COOK_FLIP_AFTER_S - PREP_LEAD_S - elapsed, 0):4.0f} s"
+    if tr.stage == Stage.PREP_FLIP:
+        return f"FLIP in   {max(COOK_FLIP_AFTER_S - elapsed, 0):4.0f} s"
+    if tr.stage == Stage.FLIP_NOW:
+        return "FLIP NOW!"
+    if tr.stage == Stage.COOKING_B:
+        return f"prep done {max(COOK_BSIDE_S - PREP_LEAD_S - side_b, 0):4.0f} s"
+    if tr.stage == Stage.PREP_READY:
+        return f"DONE in   {max(COOK_BSIDE_S - side_b, 0):4.0f} s"
+    if tr.stage == Stage.READY:
+        return "TAKE OFF!"
+    if tr.stage == Stage.OVERCOOKED:
+        return "overcooked"
+    return ""
+
+
+def render_panel(tracks: list[Track], width: int, height: int, now: float) -> np.ndarray:
+    """Bottom strip showing one card per active patty."""
+    panel = np.full((height, width, 3), 22, dtype=np.uint8)
+
+    cv2.putText(panel, f"patties: {len(tracks)}",
+                (14, 26), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                (240, 240, 240), 2, cv2.LINE_AA)
+
+    if not tracks:
+        cv2.putText(panel, "no patties on the grill",
+                    (14, height // 2 + 12),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (180, 180, 180), 2, cv2.LINE_AA)
+        return panel
+
+    sorted_tracks = sorted(tracks, key=lambda t: t.id)
+    n = len(sorted_tracks)
+    pad = 10
+    avail = width - 80                          # leave room for the "patties: N" header
+    card_w = max(170, min(220, avail // max(n, 6)))
+    card_h = height - 50
+    base_x = 80
+    base_y = 40
+    for i, tr in enumerate(sorted_tracks):
+        x = base_x + i * (card_w + pad)
+        if x + card_w > width:
+            break
+        col = STAGE_COLOUR.get(tr.stage, (200, 200, 200))
+        filled = tr.stage in (Stage.FLIP_NOW, Stage.READY, Stage.OVERCOOKED)
+        if filled:
+            cv2.rectangle(panel, (x, base_y), (x + card_w, base_y + card_h), col, -1)
+            text_col = (0, 0, 0) if tr.stage is not Stage.OVERCOOKED else (255, 255, 255)
+        else:
+            cv2.rectangle(panel, (x, base_y), (x + card_w, base_y + card_h), col, 2)
+            text_col = (240, 240, 240)
+        cv2.putText(panel, f"#{tr.id}", (x + 10, base_y + 28),
+                    cv2.FONT_HERSHEY_DUPLEX, 0.9, text_col, 2, cv2.LINE_AA)
+        cv2.putText(panel, tr.stage.value, (x + 10, base_y + 56),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_col, 1, cv2.LINE_AA)
+        elapsed = now - tr.first_seen
+        cv2.putText(panel, f"t = {elapsed:5.1f} s   T = {tr.mean_t:.2f}",
+                    (x + 10, base_y + 80),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.48, text_col, 1, cv2.LINE_AA)
+        cv2.putText(panel, next_event_label(tr, now),
+                    (x + 10, base_y + 104),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.55, text_col, 1, cv2.LINE_AA)
+    return panel
 
 
 class PattyTracker:
@@ -443,7 +591,9 @@ def main():
         print(f"calibration.json found — will auto-load on first frame")
 
     print("\nkeys: q=quit  r=redetect bar  c=draw colour bar  b=draw camera ROI"
-          "  x=reset calibration  s=save")
+          "  x=reset calibration  f=fullscreen  s=save")
+    fullscreen = False
+    PANEL_H = 160
     out_win = "burgerpark — live (via TopView capture)"
     cv2.namedWindow(out_win, cv2.WINDOW_NORMAL)
 
@@ -528,27 +678,27 @@ def main():
 
         now = time.time()
         tracks = tracker.update(dets, now)
+        for tr in tracks:
+            advance_stage(tr, now)
 
         vis = sub.copy()
         for tr in tracks:
-            # find the detection for this track this frame, if any, for mask drawing
             d = next((d for d in dets
                       if abs(d.cx - tr.cx) < 1 and abs(d.cy - tr.cy) < 1), None)
-            col = colour_for_id(tr.id)
+            col = STAGE_COLOUR.get(tr.stage, colour_for_id(tr.id))
             if d is not None:
                 overlay = vis.copy()
                 overlay[d.mask] = col
                 vis = cv2.addWeighted(vis, 0.6, overlay, 0.4, 0)
-                # contour for clarity
                 cnts, _ = cv2.findContours(d.mask.astype(np.uint8) * 255,
                                            cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                 cv2.drawContours(vis, cnts, -1, col, 2)
             elapsed = now - tr.first_seen
-            txt = f"#{tr.id}  t={elapsed:5.1f}s  T={tr.mean_t:.2f}"
-            org = (int(tr.cx) - 50, int(tr.cy) - 8)
+            txt = f"#{tr.id}  {tr.stage.value}  t={elapsed:5.1f}s"
+            org = (int(tr.cx) - 60, int(tr.cy) - 8)
             cv2.rectangle(vis,
                           (org[0] - 4, org[1] - 16),
-                          (org[0] + 130, org[1] + 4),
+                          (org[0] + 170, org[1] + 4),
                           (0, 0, 0), -1)
             cv2.putText(vis, txt, org,
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, col, 1, cv2.LINE_AA)
@@ -556,14 +706,17 @@ def main():
         n_frames += 1
         fps = n_frames / (now - last_fps_t + 1e-6) if now - last_fps_t > 0.1 else 0
         n_active = sum(1 for t in tracks if t.missed == 0)
-        header = f"patties: {n_active} active / {len(tracks)} total      {fps:4.1f} fps"
+        header = f"active {n_active} / total {len(tracks)}      {fps:4.1f} fps"
         cv2.rectangle(vis, (0, 0), (vis.shape[1], 32), (0, 0, 0), -1)
         cv2.putText(vis, header, (8, 22),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
         if now - last_fps_t > 2.0:
             last_fps_t, n_frames = now, 0
 
-        cv2.imshow(out_win, vis)
+        # compose: video on top, status panel at the bottom
+        panel = render_panel(tracks, vis.shape[1], PANEL_H, now)
+        canvas = np.vstack([vis, panel])
+        cv2.imshow(out_win, canvas)
         k = cv2.waitKey(1) & 0xFF
         if k == ord("q"):
             break
@@ -602,6 +755,11 @@ def main():
             calibration_loaded = False
             tracker = PattyTracker()
             print("calibration reset — draw colour bar (c) and ROI (b) again")
+        if k == ord("f"):
+            fullscreen = not fullscreen
+            cv2.setWindowProperty(out_win, cv2.WND_PROP_FULLSCREEN,
+                                  cv2.WINDOW_FULLSCREEN if fullscreen else cv2.WINDOW_NORMAL)
+            print("fullscreen ON" if fullscreen else "fullscreen OFF")
         if k == ord("s"):
             saved += 1
             p = OUT / f"live_{int(time.time())}_{saved:02d}.png"
