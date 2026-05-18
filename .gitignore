@@ -2,6 +2,9 @@
 # The videos themselves are stored as GitHub Release assets, not in git history.
 data/
 
+# Per-installation calibration produced by live_screen.py
+calibration.json
+
 # Python
 __pycache__/
 *.py[cod]

@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import json
 import sys
 import time
 from dataclasses import dataclass, field
@@ -53,9 +54,49 @@ WINDOW_TITLE_SUBSTRING = "TopView"
 LUT_BITS = 5
 OUT = Path(__file__).resolve().parent / "data" / "probe"
 OUT.mkdir(parents=True, exist_ok=True)
+CONFIG_PATH = Path(__file__).resolve().parent / "calibration.json"
 
 TRACK_MAX_DIST_PX = 60        # centroid match radius between frames
 TRACK_MAX_MISSED = 6          # keep a track alive this many frames after last seen
+
+
+def save_calibration(frame_w: int, frame_h: int, cb: "ColorBar",
+                     roi: tuple[int, int, int, int]) -> None:
+    """Persist colour bar + ROI as ratios so they survive window resizes."""
+    cfg = {
+        "frame_size": [int(frame_w), int(frame_h)],
+        "colorbar": {
+            "x0_rel": cb.x0 / frame_w, "x1_rel": cb.x1 / frame_w,
+            "y0_rel": cb.y0 / frame_h, "y1_rel": cb.y1 / frame_h,
+        },
+        "camera_roi": {
+            "x0_rel": roi[0] / frame_w, "x1_rel": roi[1] / frame_w,
+            "y0_rel": roi[2] / frame_h, "y1_rel": roi[3] / frame_h,
+        },
+    }
+    CONFIG_PATH.write_text(json.dumps(cfg, indent=2))
+
+
+def load_calibration(frame_bgr: np.ndarray):
+    """Return (cb, roi) reconstructed from disk against the current frame, or (None, None)."""
+    if not CONFIG_PATH.exists():
+        return None, None
+    try:
+        cfg = json.loads(CONFIG_PATH.read_text())
+    except Exception as e:
+        print(f"calibration.json unreadable ({e}); ignoring")
+        return None, None
+    H, W = frame_bgr.shape[:2]
+    cbc = cfg.get("colorbar", {})
+    rc = cfg.get("camera_roi", {})
+    bx0 = int(cbc["x0_rel"] * W); bx1 = int(cbc["x1_rel"] * W)
+    by0 = int(cbc["y0_rel"] * H); by1 = int(cbc["y1_rel"] * H)
+    cb = colorbar_from_rect(frame_bgr, bx0, by0, max(bx1 - bx0, 1), max(by1 - by0, 1))
+    if cb is None:
+        return None, None
+    roi = (int(rc["x0_rel"] * W), int(rc["x1_rel"] * W),
+           int(rc["y0_rel"] * H), int(rc["y1_rel"] * H))
+    return cb, roi
 
 
 @dataclass
@@ -361,7 +402,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--background", action="store_true",
                     help="capture via PrintWindow API (works while hidden)")
+    ap.add_argument("--reset", action="store_true",
+                    help="delete saved calibration and force manual setup")
     args = ap.parse_args()
+
+    if args.reset and CONFIG_PATH.exists():
+        CONFIG_PATH.unlink()
+        print(f"deleted {CONFIG_PATH.name}; will re-calibrate from scratch")
 
     print(f"looking for window containing '{WINDOW_TITLE_SUBSTRING}' ...")
     win = find_window()
@@ -390,8 +437,13 @@ def main():
     roi = None
     manual_roi = False
     tracker = PattyTracker()
+    calibration_loaded = False           # did we restore cb+roi from disk?
 
-    print("\nkeys: q=quit  r=redetect bar  c=draw colour bar  b=draw camera ROI  s=save")
+    if CONFIG_PATH.exists():
+        print(f"calibration.json found — will auto-load on first frame")
+
+    print("\nkeys: q=quit  r=redetect bar  c=draw colour bar  b=draw camera ROI"
+          "  x=reset calibration  s=save")
     out_win = "burgerpark — live (via TopView capture)"
     cv2.namedWindow(out_win, cv2.WINDOW_NORMAL)
 
@@ -409,6 +461,18 @@ def main():
             print(f"capture error: {e}")
             time.sleep(0.5)
             continue
+
+        if cb is None and not calibration_loaded:
+            saved_cb, saved_roi = load_calibration(frame)
+            if saved_cb is not None and saved_roi is not None:
+                cb = saved_cb
+                qlut = build_qlut(cb)
+                roi = saved_roi
+                manual_roi = True
+                calibration_loaded = True
+                print(f"loaded calibration: colour bar x={cb.x0}-{cb.x1} y={cb.y0}-{cb.y1}")
+                print(f"loaded camera ROI : x={roi[0]}-{roi[1]} y={roi[2]}-{roi[3]}")
+                print("press 'x' to wipe it and start over")
 
         if cb is None:
             cb = find_colorbar(frame)
@@ -432,6 +496,9 @@ def main():
                             roi = detect_camera_roi(frame, cb)
                             print(f"camera ROI (auto): x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
                             print("press 'b' to draw the camera ROI by hand")
+                        if cb is not None and roi is not None:
+                            save_calibration(frame.shape[1], frame.shape[0], cb, roi)
+                            print(f"saved → {CONFIG_PATH.name}")
                     else:
                         print("colour bar selection cancelled")
                 if k == ord("b"):
@@ -440,6 +507,9 @@ def main():
                         roi = new_roi
                         manual_roi = True
                         print(f"camera ROI (manual): x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
+                        if cb is not None and roi is not None:
+                            save_calibration(frame.shape[1], frame.shape[0], cb, roi)
+                            print(f"saved → {CONFIG_PATH.name}")
                 continue
             print(f"colour bar (auto): x={cb.x0}-{cb.x1}  y={cb.y0}-{cb.y1}  L={len(cb.lut_norm)}")
             qlut = build_qlut(cb)
@@ -506,6 +576,9 @@ def main():
                 cb = new_cb
                 qlut = build_qlut(cb)
                 print(f"colour bar (manual): x={cb.x0}-{cb.x1}  y={cb.y0}-{cb.y1}")
+                if roi is not None:
+                    save_calibration(frame.shape[1], frame.shape[0], cb, roi)
+                    print(f"saved → {CONFIG_PATH.name}")
             else:
                 print("colour bar selection cancelled")
         if k == ord("b"):
@@ -515,8 +588,20 @@ def main():
                 manual_roi = True
                 tracker = PattyTracker()       # ids are stale after ROI change
                 print(f"camera ROI (manual): x={roi[0]}-{roi[1]}  y={roi[2]}-{roi[3]}")
+                if cb is not None:
+                    save_calibration(frame.shape[1], frame.shape[0], cb, roi)
+                    print(f"saved → {CONFIG_PATH.name}")
             else:
                 print("ROI selection cancelled")
+        if k == ord("x"):
+            if CONFIG_PATH.exists():
+                CONFIG_PATH.unlink()
+                print(f"wiped {CONFIG_PATH.name}")
+            cb, qlut, roi = None, None, None
+            manual_roi = False
+            calibration_loaded = False
+            tracker = PattyTracker()
+            print("calibration reset — draw colour bar (c) and ROI (b) again")
         if k == ord("s"):
             saved += 1
             p = OUT / f"live_{int(time.time())}_{saved:02d}.png"
