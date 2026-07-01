@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>버거파크 휴무 안내</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --brand: #E23B2E;        /* 버거파크 레드 */
+      --brand-dark: #B0271C;
+      --bun: #F2B441;          /* 번(빵) 옐로우 */
+      --bun-dark: #E09A2B;
+      --cream: #FFF6E9;        /* 배경 크림 */
+      --ink: #2B1A12;          /* 진한 브라운 텍스트 */
+      --ink-soft: #6B5245;
+      --line: rgba(43, 26, 18, 0.14);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      background: #cbb79c;
+      font-family: 'Noto Sans KR', sans-serif;
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===== 화면 레이아웃 ===== */
+    .stage {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 32px 16px 56px;
+    }
+
+    /* ===== 포스터 (A4 세로) ===== */
+    .poster {
+      position: relative;
+      width: 210mm;
+      max-width: 100%;
+      aspect-ratio: 210 / 297;
+      background:
+        radial-gradient(120% 80% at 50% -10%, #fffdf8 0%, var(--cream) 55%, #ffeccf 100%);
+      border-radius: 18px;
+      box-shadow: 0 30px 70px rgba(0,0,0,0.32);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 상단/하단 장식 스트라이프 */
+    .poster::before,
+    .poster::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0;
+      height: 14px;
+      background: repeating-linear-gradient(
+        -45deg,
+        var(--brand) 0 22px,
+        var(--bun) 22px 44px
+      );
+      z-index: 3;
+    }
+    .poster::before { top: 0; }
+    .poster::after { bottom: 0; }
+
+    .poster__inner {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 46px 44px 40px;
+      z-index: 2;
+    }
+
+    /* ===== 브랜드 헤더 ===== */
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .brand__mark {
+      font-size: 40px;
+      line-height: 1;
+      filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+    }
+    .brand__name {
+      font-family: 'Black Han Sans', sans-serif;
+      font-size: 30px;
+      letter-spacing: -0.5px;
+      color: var(--brand);
+    }
+    .brand__name small {
+      display: block;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-weight: 500;
+      font-size: 11px;
+      letter-spacing: 4px;
+      color: var(--ink-soft);
+      text-align: center;
+      margin-top: 2px;
+    }
+
+    /* ===== 메인 타이틀 ===== */
+    .headline {
+      margin-top: 34px;
+      text-align: center;
+    }
+    .headline .eyebrow {
+      display: inline-block;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 3px;
+      color: #fff;
+      background: var(--ink);
+      padding: 6px 16px;
+      border-radius: 999px;
+    }
+    .headline .title {
+      font-family: 'Black Han Sans', sans-serif;
+      font-size: 88px;
+      line-height: 1.02;
+      margin-top: 18px;
+      color: var(--brand);
+      text-shadow: 3px 4px 0 var(--bun);
+    }
+    .headline .subtitle {
+      margin-top: 14px;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--ink-soft);
+      line-height: 1.6;
+    }
+
+    /* ===== 휴무 기간 카드 ===== */
+    .period {
+      margin-top: 34px;
+      background: #fff;
+      border: 2px solid var(--line);
+      border-radius: 20px;
+      padding: 26px 28px;
+      box-shadow: 0 10px 24px rgba(43,26,18,0.08);
+    }
+    .period__label {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: var(--brand);
+      text-align: center;
+    }
+    .period__dates {
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .date-block { text-align: center; min-width: 130px; }
+    .date-block .day {
+      font-family: 'Black Han Sans', sans-serif;
+      font-size: 34px;
+      color: var(--ink);
+      line-height: 1.1;
+    }
+    .date-block .dow {
+      margin-top: 4px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink-soft);
+    }
+    .date-sep {
+      font-size: 30px;
+      color: var(--bun-dark);
+      font-weight: 900;
+    }
+    .period__note {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .period__note b { color: var(--brand); }
+
+    /* ===== 사유 / 안내 ===== */
+    .reason {
+      margin-top: 22px;
+      text-align: center;
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--ink-soft);
+      padding: 0 6px;
+    }
+
+    /* ===== 하단 정보 ===== */
+    .foot {
+      margin-top: auto;
+      padding-top: 26px;
+      border-top: 2px dashed var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+    }
+    .foot__info { font-size: 13px; line-height: 1.9; color: var(--ink-soft); }
+    .foot__info b { color: var(--ink); }
+    .foot__thanks {
+      text-align: right;
+      font-family: 'Black Han Sans', sans-serif;
+      font-size: 22px;
+      color: var(--brand);
+      line-height: 1.3;
+    }
+    .foot__thanks span {
+      display: block;
+      font-family: 'Noto Sans KR', sans-serif;
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--ink-soft);
+      margin-top: 4px;
+    }
+
+    /* ===== 인쇄 버튼 (화면 전용) ===== */
+    .toolbar { display: flex; gap: 10px; }
+    .toolbar button {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      background: var(--brand);
+      border: none;
+      border-radius: 999px;
+      padding: 12px 24px;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(226,59,46,0.35);
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .toolbar button:active { transform: translateY(1px); }
+    .toolbar .hint { align-self: center; font-size: 12px; color: #3f3128; }
+
+    /* ===== 반응형 (모바일) ===== */
+    @media (max-width: 520px) {
+      .stage { padding: 16px 10px 32px; }
+      .poster__inner { padding: 34px 22px 28px; }
+      .headline .title { font-size: 58px; }
+      .headline .eyebrow { font-size: 12px; }
+      .date-block .day { font-size: 26px; }
+      .foot { flex-direction: column; align-items: flex-start; }
+      .foot__thanks { text-align: left; }
+    }
+
+    /* ===== 인쇄 ===== */
+    @page { size: A4 portrait; margin: 0; }
+    @media print {
+      html, body { background: #fff; }
+      .stage { padding: 0; min-height: auto; }
+      .toolbar { display: none !important; }
+      .poster {
+        width: 210mm;
+        height: 297mm;
+        max-width: none;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="toolbar">
+      <button onclick="window.print()">🖨️ 포스터 인쇄 / PDF 저장</button>
+      <span class="hint">A4 세로에 맞춰 인쇄됩니다</span>
+    </div>
+
+    <!-- ============ 포스터 ============ -->
+    <div class="poster" role="img" aria-label="버거파크 여름 휴가 휴무 안내 포스터">
+      <div class="poster__inner">
+
+        <!-- 브랜드 -->
+        <div class="brand">
+          <div class="brand__mark">🍔</div>
+          <div class="brand__name">
+            버거파크
+            <small>B U R G E R&nbsp;&nbsp;P A R K</small>
+          </div>
+        </div>
+
+        <!-- 헤드라인 -->
+        <div class="headline">
+          <span class="eyebrow">CLOSED · 휴무 안내</span>
+          <div class="title">여름 휴가<br>휴무 안내</div>
+          <p class="subtitle">
+            항상 버거파크를 찾아주시는 고객님께 감사드립니다.<br>
+            아래 기간 동안 <b>여름 휴가</b>로 매장을 쉬어갑니다.
+          </p>
+        </div>
+
+        <!-- 휴무 기간 -->
+        <div class="period">
+          <div class="period__label">🗓️ 휴&nbsp;무&nbsp;기&nbsp;간</div>
+          <div class="period__dates">
+            <div class="date-block">
+              <div class="day">8. 4</div>
+              <div class="dow">월요일</div>
+            </div>
+            <div class="date-sep">~</div>
+            <div class="date-block">
+              <div class="day">8. 7</div>
+              <div class="dow">목요일</div>
+            </div>
+          </div>
+          <div class="period__note">
+            정상 영업 &nbsp;<b>8월 8일(금)</b>&nbsp; 부터
+          </div>
+        </div>
+
+        <!-- 안내 문구 -->
+        <p class="reason">
+          휴무 기간 중에는 매장 방문 및 배달 주문이 모두 중단됩니다.<br>
+          더 맛있는 버거로 보답하기 위한 재정비 기간이오니<br>
+          너른 양해 부탁드립니다. 🙇
+        </p>
+
+        <!-- 하단 정보 -->
+        <div class="foot">
+          <div class="foot__info">
+            <b>버거파크 본점</b><br>
+            ☎ 1544-0000<br>
+            영업시간 &nbsp;11:00 – 22:00
+          </div>
+          <div class="foot__thanks">
+            THANK YOU!
+            <span>휴가 후 더 건강한 모습으로 뵙겠습니다</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <!-- ============ /포스터 ============ -->
+  </div>
+</body>
+</html>
